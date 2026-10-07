@@ -18,6 +18,14 @@ const adminSessionTTL = 8 * time.Hour // shorter than a member session — admin
 
 const adminTokenType = "admin"
 
+// AdminRoleSuperadmin is the only admin role that exists today, and the
+// default for admins.role (migrations/0003_admins.sql). Every admin route
+// requires it — see handlers.RequireAdminSession. An admin row carrying any
+// other value is denied rather than treated as a superadmin, so a future
+// lesser role can't accidentally inherit full access before the code that
+// limits it exists.
+const AdminRoleSuperadmin = "superadmin"
+
 // adminClaims is the JWT payload for a signed-in admin. Email identifies
 // the admin for the audit_log's actor_admin_email column.
 type adminClaims struct {

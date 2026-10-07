@@ -27,6 +27,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	member, err := s.Store.GetMember(ctx, req.KitID)
 	if errors.Is(err, store.ErrNotFound) {
+		s.auditFailure(r, req.KitID, "login", "unknown_kit_id")
 		genericError(w)
 		return
 	}
@@ -35,6 +36,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !member.Registered || member.TOTPSecretEnc == nil {
+		s.auditFailure(r, req.KitID, "login", "not_registered")
 		genericError(w)
 		return
 	}
@@ -45,6 +47,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !auth.VerifyTOTP(string(secretPlain), req.Code) {
+		s.auditFailure(r, req.KitID, "login", "bad_code")
 		genericError(w)
 		return
 	}
@@ -56,7 +59,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	s.Sessions.SetCookie(w, token)
 
-	_ = s.Store.LogAudit(ctx, req.KitID, "login", clientIP(r), nil, nil)
+	s.audit(r, req.KitID, "login", nil, nil)
 	writeJSON(w, http.StatusOK, sessionResponse{KitID: req.KitID})
 }
 
@@ -87,11 +90,11 @@ func (s *Server) Recovery(w http.ResponseWriter, r *http.Request) {
 	}
 	matched, ok := matchRecoveryKey(keys, req.RecoveryKey)
 	if !ok {
+		s.auditFailure(r, req.KitID, "recovery", "no_matching_key")
 		genericError(w)
 		return
 	}
-	if err := s.Store.MarkRecoveryKeyUsed(ctx, matched.ID); err != nil {
-		serverError(w)
+	if !s.claimRecoveryKey(w, r, req.KitID, "recovery", matched.ID) {
 		return
 	}
 
@@ -101,7 +104,7 @@ func (s *Server) Recovery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = s.Store.LogAudit(ctx, req.KitID, "recovery", clientIP(r), nil, nil)
+	s.audit(r, req.KitID, "recovery", nil, nil)
 	writeJSON(w, http.StatusOK, onboardBeginResponse{OtpauthURL: otpauthURL})
 }
 

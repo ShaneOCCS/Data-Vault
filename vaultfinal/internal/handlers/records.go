@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"context"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -88,7 +90,10 @@ func (s *Server) GetRecord(w http.ResponseWriter, r *http.Request) {
 
 	// Every successful, ownership-checked view is logged — this is the
 	// audit trail described in store.LogRecordAccess's doc comment.
-	_ = s.Store.LogRecordAccess(ctx, kitID, rec.ID, clientIP(r))
+	// Best-effort like audit(): a failed write is logged, not swallowed.
+	if err := s.Store.LogRecordAccess(context.WithoutCancel(ctx), kitID, rec.ID, clientIP(r)); err != nil {
+		log.Printf("record access log: failed to write: %v", err)
+	}
 
 	writeJSON(w, http.StatusOK, recordResponse{
 		ID:          rec.ID,

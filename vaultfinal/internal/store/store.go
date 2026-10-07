@@ -35,6 +35,17 @@ var ErrNotFound = errors.New("store: not found")
 // and are not an error condition worth surfacing further up.
 var ErrDuplicateKitID = errors.New("store: duplicate kit id")
 
+// ErrAlreadyUsed is returned when a single-use credential (recovery key or
+// admin invite) could not be claimed because it was already spent — most
+// importantly when a concurrent request claimed it between this request's
+// read and its write. Handlers treat it exactly like a wrong credential
+// (invariant #6).
+var ErrAlreadyUsed = errors.New("store: credential already used")
+
+// ErrDuplicateAdminEmail is returned when an admin with the given email
+// already exists.
+var ErrDuplicateAdminEmail = errors.New("store: admin email already exists")
+
 // Store wraps a pgx connection pool. One Store is created at startup in
 // cmd/server/main.go and shared (it's safe for concurrent use — pgxpool
 // manages its own connection checkout per call) across every request.
@@ -182,7 +193,7 @@ func (s *Store) InsertRecoveryKeys(ctx context.Context, memberID, purpose string
 // GetUnusedRecoveryKeys returns every unused recovery key for memberID with
 // the given purpose. Callers (OnboardBegin, Recovery) bcrypt-compare the
 // candidate plaintext against each returned hash in turn — there can only
-// ever be a handful of unused keys per member per purpose (3 total minted,
+// ever be a handful of unused keys per member per purpose (4 total minted,
 // ever), so this is a cheap loop, not a scan.
 func (s *Store) GetUnusedRecoveryKeys(ctx context.Context, memberID, purpose string) ([]RecoveryKey, error) {
 	rows, err := s.pool.Query(ctx, `
@@ -207,13 +218,20 @@ func (s *Store) GetUnusedRecoveryKeys(ctx context.Context, memberID, purpose str
 }
 
 // MarkRecoveryKeyUsed stamps a recovery key as spent so it can never be
-// redeemed a second time.
+// redeemed a second time. The UPDATE only matches a key that is still
+// unused, so it doubles as an atomic claim: if two requests race on the
+// same key, Postgres lets exactly one of them flip used_at and the other
+// gets ErrAlreadyUsed.
 func (s *Store) MarkRecoveryKeyUsed(ctx context.Context, id int64) error {
-	_, err := s.pool.Exec(ctx, `
-		UPDATE recovery_keys SET used_at = now() WHERE id = $1
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE recovery_keys SET used_at = now()
+		WHERE id = $1 AND used_at IS NULL
 	`, id)
 	if err != nil {
 		return fmt.Errorf("store: mark recovery key used: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrAlreadyUsed
 	}
 	return nil
 }
@@ -357,11 +375,22 @@ func (s *Store) LogRecordAccess(ctx context.Context, memberID string, recordID i
 // audit_log
 // =========================================================================
 
+// maxAuditPrincipalLen matches audit_log.principal's varchar(64).
+const maxAuditPrincipalLen = 64
+
 // LogAudit writes one audit row. actorAdminEmail is nil for
 // member-originated events (login, recovery) and set for admin-performed
 // actions (provision, ingest, invite) — see the schema comment in
 // claude.md for why that column is nullable rather than a second table.
+//
+// principal is truncated to the column's 64-character limit: failed-attempt
+// events record whatever KIT ID or email the caller submitted, which is
+// untrusted input of any length, and an over-long value must not make the
+// audit insert itself fail.
 func (s *Store) LogAudit(ctx context.Context, principal, eventType, ipAddress string, detail map[string]any, actorAdminEmail *string) error {
+	if r := []rune(principal); len(r) > maxAuditPrincipalLen {
+		principal = string(r[:maxAuditPrincipalLen])
+	}
 	detailJSON, err := json.Marshal(detail)
 	if err != nil {
 		return fmt.Errorf("store: marshal audit detail: %w", err)
@@ -400,7 +429,7 @@ func (s *Store) InsertAdmin(ctx context.Context, email, passwordHash string) err
 		INSERT INTO admins (email, password_hash) VALUES ($1, $2)
 	`, email, passwordHash)
 	if isUniqueViolation(err) {
-		return fmt.Errorf("store: admin email already exists: %w", err)
+		return ErrDuplicateAdminEmail
 	}
 	if err != nil {
 		return fmt.Errorf("store: insert admin: %w", err)
@@ -482,13 +511,43 @@ func (s *Store) GetPendingInvitesByEmail(ctx context.Context, email string) ([]A
 	return out, rows.Err()
 }
 
-// MarkInviteUsed stamps an invite as spent so it can't be replayed.
-func (s *Store) MarkInviteUsed(ctx context.Context, id int64) error {
-	_, err := s.pool.Exec(ctx, `
-		UPDATE admin_invites SET used_at = now() WHERE id = $1
-	`, id)
+// AcceptInviteAndCreateAdmin claims invite inviteID and creates the admin
+// account in ONE transaction, so the two always succeed or fail together:
+//   - the claim only matches an invite that is still unused and unexpired,
+//     so two concurrent accepts of the same token can't both succeed (the
+//     loser gets ErrAlreadyUsed);
+//   - if the admin insert fails (e.g. ErrDuplicateAdminEmail), the claim
+//     is rolled back and the invite stays redeemable.
+func (s *Store) AcceptInviteAndCreateAdmin(ctx context.Context, inviteID int64, email, passwordHash string) error {
+	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("store: mark invite used: %w", err)
+		return fmt.Errorf("store: begin accept invite: %w", err)
+	}
+	defer tx.Rollback(ctx) // no-op after a successful Commit
+
+	tag, err := tx.Exec(ctx, `
+		UPDATE admin_invites SET used_at = now()
+		WHERE id = $1 AND used_at IS NULL AND expires_at > now()
+	`, inviteID)
+	if err != nil {
+		return fmt.Errorf("store: claim invite: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrAlreadyUsed
+	}
+
+	_, err = tx.Exec(ctx, `
+		INSERT INTO admins (email, password_hash) VALUES ($1, $2)
+	`, email, passwordHash)
+	if isUniqueViolation(err) {
+		return ErrDuplicateAdminEmail
+	}
+	if err != nil {
+		return fmt.Errorf("store: insert admin: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("store: commit accept invite: %w", err)
 	}
 	return nil
 }

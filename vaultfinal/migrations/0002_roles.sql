@@ -5,6 +5,11 @@
 -- PASSWORD '...'` run manually over the same SSH session used to run
 -- migrations, or via the RDS console) — a real credential has no business
 -- living in a git-tracked file, migration or otherwise.
+--
+-- Roles are cluster-wide in Postgres, not per-database, so each CREATE ROLE
+-- is guarded: a second database on the same cluster (staging, or the
+-- throwaway databases the integration tests create) must not fail here
+-- just because the role already exists.
 
 -- vaultapp is the one role cmd/server currently connects as. It gets
 -- exactly the privileges the application needs and nothing else: no
@@ -12,7 +17,11 @@
 -- invites are disabled/expired via a flag or timestamp instead, so
 -- audit_log.actor_admin_email and audit trails stay meaningful forever),
 -- no DDL, no superuser.
-CREATE ROLE vaultapp LOGIN;
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'vaultapp') THEN
+        CREATE ROLE vaultapp LOGIN;
+    END IF;
+END $$;
 
 GRANT SELECT, INSERT, UPDATE ON
     members, recovery_keys, medical_records, ingestion_batches,
@@ -28,7 +37,11 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO vaultapp;
 -- separate from the main API. Creating the role in this migration means
 -- that future split doesn't require a schema change, only a new binary
 -- that connects as app_ingest instead of vaultapp.
-CREATE ROLE app_ingest LOGIN;
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'app_ingest') THEN
+        CREATE ROLE app_ingest LOGIN;
+    END IF;
+END $$;
 
 GRANT INSERT ON medical_records, ingestion_batches TO app_ingest;
 GRANT USAGE, SELECT ON SEQUENCE medical_records_id_seq TO app_ingest;

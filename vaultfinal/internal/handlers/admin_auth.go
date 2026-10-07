@@ -30,6 +30,7 @@ func (s *Server) AdminLogin(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	admin, err := s.Store.GetAdminByEmail(ctx, req.Email)
 	if errors.Is(err, store.ErrNotFound) {
+		s.auditFailure(r, req.Email, "admin_login", "unknown_email")
 		genericError(w)
 		return
 	}
@@ -37,7 +38,15 @@ func (s *Server) AdminLogin(w http.ResponseWriter, r *http.Request) {
 		serverError(w)
 		return
 	}
-	if !admin.Active || !auth.ComparePassword(admin.PasswordHash, req.Password) {
+	// The password is checked before the account's status so the status
+	// reason is only ever recorded for someone who knows the password.
+	if !auth.ComparePassword(admin.PasswordHash, req.Password) {
+		s.auditFailure(r, req.Email, "admin_login", "bad_password")
+		genericError(w)
+		return
+	}
+	if reason, ok := adminAllowed(admin); !ok {
+		s.auditFailure(r, req.Email, "admin_login", reason)
 		genericError(w)
 		return
 	}
@@ -49,14 +58,29 @@ func (s *Server) AdminLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	s.AdminSessions.SetAdminCookie(w, token)
 
-	_ = s.Store.LogAudit(ctx, admin.Email, "admin_login", clientIP(r), nil, nil)
+	s.audit(r, admin.Email, "admin_login", nil, nil)
 	writeJSON(w, http.StatusOK, adminSessionResponse{Email: admin.Email})
+}
+
+// adminAllowed reports whether an admin account may hold a session right
+// now. It's checked both at login and on every admin request (see
+// RequireAdminSession), so disabling an admin or changing their role takes
+// effect immediately rather than when their JWT expires. reason is
+// internal-only, for the audit log.
+func adminAllowed(admin *store.Admin) (reason string, ok bool) {
+	if !admin.Active {
+		return "inactive", false
+	}
+	if admin.Role != auth.AdminRoleSuperadmin {
+		return "role_not_permitted", false
+	}
+	return "", true
 }
 
 // AdminLogout clears the admin session cookie.
 func (s *Server) AdminLogout(w http.ResponseWriter, r *http.Request) {
 	email := adminEmailFromContext(r.Context())
 	s.AdminSessions.ClearAdminCookie(w)
-	_ = s.Store.LogAudit(r.Context(), email, "admin_logout", clientIP(r), nil, nil)
+	s.audit(r, email, "admin_logout", nil, nil)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
