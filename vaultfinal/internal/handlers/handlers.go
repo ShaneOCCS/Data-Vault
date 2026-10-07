@@ -6,7 +6,9 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 
@@ -121,6 +123,33 @@ func notFound(w http.ResponseWriter) {
 // fragment, a raw driver message) that shouldn't reach a client.
 func serverError(w http.ResponseWriter) {
 	writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+}
+
+// audit writes one audit_log row for r. It stays best-effort — a failed
+// audit write never fails the request it describes (by then the action
+// has already happened; failing the response would only hide its result,
+// e.g. a provision batch's one-time plaintext keys) — but a failure is no
+// longer silent: it's written to the process log (journald on EC2) so a
+// broken audit trail gets noticed.
+//
+// The write uses a context that isn't canceled when the client disconnects,
+// so a caller dropping the connection right after a credential attempt
+// can't also drop that attempt's audit row.
+func (s *Server) audit(r *http.Request, principal, eventType string, detail map[string]any, actorAdminEmail *string) {
+	ctx := context.WithoutCancel(r.Context())
+	if err := s.Store.LogAudit(ctx, principal, eventType, clientIP(r), detail, actorAdminEmail); err != nil {
+		log.Printf("audit: failed to write %q event: %v", eventType, err)
+	}
+}
+
+// auditFailure records a rejected credential attempt as "<eventType>_failed"
+// with an internal-only reason. The reason exists only in audit_log — the
+// client still gets the one genericError (invariant #6) — so an operator
+// can tell a member mistyping a code from someone probing KIT IDs.
+// principal is whatever the caller submitted (KIT ID or email), which may
+// not exist; store.LogAudit truncates it to fit the column.
+func (s *Server) auditFailure(r *http.Request, principal, eventType, reason string) {
+	s.audit(r, principal, eventType+"_failed", map[string]any{"reason": reason}, nil)
 }
 
 // clientIP extracts the caller's address for audit logging and record

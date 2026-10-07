@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
@@ -55,7 +56,7 @@ func (s *Server) CreateInvite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	invitedByCopy := invitedBy
-	_ = s.Store.LogAudit(ctx, req.Email, "admin_invite_created", clientIP(r), map[string]any{"invitedBy": invitedBy}, &invitedByCopy)
+	s.audit(r, req.Email, "admin_invite_created", map[string]any{"invitedBy": invitedBy}, &invitedByCopy)
 	writeJSON(w, http.StatusCreated, createInviteResponse{
 		Email:     req.Email,
 		Token:     token,
@@ -80,6 +81,12 @@ func (s *Server) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		badRequest(w, "email, token, and password are required")
 		return
 	}
+	// Checked before the invite is even looked up, so a weak password can
+	// never consume (or learn anything about) an invite.
+	if err := auth.ValidateAdminPassword(req.Password); err != nil {
+		badRequest(w, err.Error())
+		return
+	}
 
 	ctx := r.Context()
 	invites, err := s.Store.GetPendingInvitesByEmail(ctx, req.Email)
@@ -89,11 +96,8 @@ func (s *Server) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 	}
 	matched, ok := matchInviteToken(invites, req.Token)
 	if !ok {
+		s.auditFailure(r, req.Email, "admin_invite_accept", "no_matching_invite")
 		genericError(w)
-		return
-	}
-	if err := s.Store.MarkInviteUsed(ctx, matched.ID); err != nil {
-		serverError(w)
 		return
 	}
 
@@ -102,7 +106,25 @@ func (s *Server) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		serverError(w)
 		return
 	}
-	if err := s.Store.InsertAdmin(ctx, req.Email, passwordHash); err != nil {
+	// Claiming the invite and creating the admin happen in one transaction
+	// (see store.AcceptInviteAndCreateAdmin): a concurrent accept of the
+	// same token loses the claim, and a failed insert leaves the invite
+	// unspent.
+	err = s.Store.AcceptInviteAndCreateAdmin(ctx, matched.ID, req.Email, passwordHash)
+	if errors.Is(err, store.ErrAlreadyUsed) {
+		s.auditFailure(r, req.Email, "admin_invite_accept", "invite_already_used")
+		genericError(w)
+		return
+	}
+	if errors.Is(err, store.ErrDuplicateAdminEmail) {
+		// Only reachable with a valid token for this exact email, so
+		// saying so tells nothing to someone without one. The invite is
+		// NOT consumed.
+		s.auditFailure(r, req.Email, "admin_invite_accept", "admin_exists")
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "an admin account with this email already exists"})
+		return
+	}
+	if err != nil {
 		serverError(w)
 		return
 	}
@@ -114,7 +136,7 @@ func (s *Server) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 	}
 	s.AdminSessions.SetAdminCookie(w, token)
 
-	_ = s.Store.LogAudit(ctx, req.Email, "admin_invite_accepted", clientIP(r), nil, nil)
+	s.audit(r, req.Email, "admin_invite_accepted", nil, nil)
 	writeJSON(w, http.StatusOK, adminSessionResponse{Email: req.Email})
 }
 

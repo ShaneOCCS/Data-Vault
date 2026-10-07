@@ -61,11 +61,11 @@ func (s *Server) OnboardBegin(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		// Unknown KIT ID and "right KIT ID, wrong/used/wrong-purpose key"
 		// land here identically — invariant #6.
+		s.auditFailure(r, req.KitID, "onboard_begin", "no_matching_key")
 		genericError(w)
 		return
 	}
-	if err := s.Store.MarkRecoveryKeyUsed(ctx, matched.ID); err != nil {
-		serverError(w)
+	if !s.claimRecoveryKey(w, r, req.KitID, "onboard_begin", matched.ID) {
 		return
 	}
 
@@ -75,7 +75,7 @@ func (s *Server) OnboardBegin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = s.Store.LogAudit(ctx, req.KitID, "onboard_begin", clientIP(r), nil, nil)
+	s.audit(r, req.KitID, "onboard_begin", nil, nil)
 	writeJSON(w, http.StatusOK, onboardBeginResponse{OtpauthURL: otpauthURL})
 }
 
@@ -103,6 +103,7 @@ func (s *Server) OnboardComplete(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	member, err := s.Store.GetMember(ctx, req.KitID)
 	if errors.Is(err, store.ErrNotFound) {
+		s.auditFailure(r, req.KitID, "onboard_complete", "unknown_kit_id")
 		genericError(w)
 		return
 	}
@@ -111,6 +112,7 @@ func (s *Server) OnboardComplete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if member.TOTPSecretEnc == nil {
+		s.auditFailure(r, req.KitID, "onboard_complete", "no_pending_secret")
 		genericError(w) // no pending secret — nothing to confirm
 		return
 	}
@@ -121,6 +123,7 @@ func (s *Server) OnboardComplete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !auth.VerifyTOTP(string(secretPlain), req.Code) {
+		s.auditFailure(r, req.KitID, "onboard_complete", "bad_code")
 		genericError(w)
 		return
 	}
@@ -137,8 +140,27 @@ func (s *Server) OnboardComplete(w http.ResponseWriter, r *http.Request) {
 	}
 	s.Sessions.SetCookie(w, token)
 
-	_ = s.Store.LogAudit(ctx, req.KitID, "onboard_complete", clientIP(r), nil, nil)
+	s.audit(r, req.KitID, "onboard_complete", nil, nil)
 	writeJSON(w, http.StatusOK, sessionResponse{KitID: req.KitID})
+}
+
+// claimRecoveryKey atomically marks a matched key as used. If a concurrent
+// request already spent it (store.ErrAlreadyUsed), this request fails
+// exactly like a wrong key — invariant #6 — so only one of two racing
+// redemptions can ever go on to enroll a new authenticator. It writes the
+// response itself and returns false when the caller must stop.
+func (s *Server) claimRecoveryKey(w http.ResponseWriter, r *http.Request, kitID, eventType string, keyID int64) bool {
+	err := s.Store.MarkRecoveryKeyUsed(r.Context(), keyID)
+	if errors.Is(err, store.ErrAlreadyUsed) {
+		s.auditFailure(r, kitID, eventType, "key_already_used")
+		genericError(w)
+		return false
+	}
+	if err != nil {
+		serverError(w)
+		return false
+	}
+	return true
 }
 
 // matchRecoveryKey bcrypt-compares plaintext against every candidate key's

@@ -40,8 +40,9 @@ func main() {
 		}
 		*password = p
 	}
-	if len(*password) < 12 {
-		log.Fatal("bootstrap-admin: password must be at least 12 characters")
+	// Same policy AcceptInvite enforces — one definition in package auth.
+	if err := auth.ValidateAdminPassword(*password); err != nil {
+		log.Fatalf("bootstrap-admin: %v", err)
 	}
 
 	dbURL := os.Getenv("DATABASE_URL")

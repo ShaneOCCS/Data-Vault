@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -14,10 +15,18 @@ import (
 
 // maxProvisionBatchCount bounds how many members one /api/admin/provision
 // request can create. Each member costs a KIT ID insert-and-retry loop plus
-// 3 bcrypt hashes (bcrypt is deliberately slow) — this caps how much work
+// 4 bcrypt hashes (bcrypt is deliberately slow) — this caps how much work
 // one request can force onto the server, not how big a real cohort can be
 // (an admin just issues multiple requests for a bigger cohort).
-const maxProvisionBatchCount = 200
+const maxProvisionBatchCount = 1000
+
+// signupKeysPerMember and recoveryKeysPerMember set how many keys of each
+// purpose a newly provisioned member receives: 1 to complete first
+// enrollment, 3 to re-enroll after losing their authenticator device.
+const (
+	signupKeysPerMember   = 1
+	recoveryKeysPerMember = 3
+)
 
 // kitIDGenerationRetries caps how many times provisionOneMember retries
 // after a KIT ID collision before giving up and failing the whole request.
@@ -49,7 +58,7 @@ type provisionedMember struct {
 func (s *Server) Provision(w http.ResponseWriter, r *http.Request) {
 	var req provisionRequest
 	if err := decodeJSON(w, r, &req); err != nil || req.Count < 1 || req.Count > maxProvisionBatchCount {
-		badRequest(w, "count must be an integer between 1 and 200")
+		badRequest(w, fmt.Sprintf("count must be an integer between 1 and %d", maxProvisionBatchCount))
 		return
 	}
 
@@ -74,14 +83,14 @@ func (s *Server) Provision(w http.ResponseWriter, r *http.Request) {
 		// batch) so the audit trail shows exactly which KIT IDs came from
 		// which admin — a batch just reads as N rows with close timestamps.
 		adminEmailCopy := adminEmail
-		_ = s.Store.LogAudit(ctx, kitID, "member_provisioned", clientIP(r), nil, &adminEmailCopy)
+		s.audit(r, kitID, "member_provisioned", nil, &adminEmailCopy)
 	}
 
 	writeJSON(w, http.StatusCreated, map[string]any{"members": members})
 }
 
 // provisionOneMember generates a KIT ID (retrying on collision), then
-// generates and stores its 3 recovery keys (1 signup + 2 recovery). Factored
+// generates and stores its 4 recovery keys (1 signup + 3 recovery). Factored
 // out of Provision so the batch loop is just "call this N times."
 func (s *Server) provisionOneMember(ctx context.Context) (kitID string, plaintextKeys []string, err error) {
 	for attempt := 0; ; attempt++ {
@@ -100,11 +109,11 @@ func (s *Server) provisionOneMember(ctx context.Context) (kitID string, plaintex
 		return "", nil, err
 	}
 
-	signupKeys, err := auth.GenerateRecoveryKeys(auth.RecoveryPurposeSignup, 1)
+	signupKeys, err := auth.GenerateRecoveryKeys(auth.RecoveryPurposeSignup, signupKeysPerMember)
 	if err != nil {
 		return "", nil, err
 	}
-	recoveryKeys, err := auth.GenerateRecoveryKeys(auth.RecoveryPurposeRecovery, 2)
+	recoveryKeys, err := auth.GenerateRecoveryKeys(auth.RecoveryPurposeRecovery, recoveryKeysPerMember)
 	if err != nil {
 		return "", nil, err
 	}
@@ -138,7 +147,7 @@ type topUpRecoveryKeysRequest struct {
 }
 
 // TopUpRecoveryKeys mints fresh recovery-purpose keys for a member who has
-// used up their original 2 (lost their device twice). It NEVER mints a
+// used up their original 3 (lost their device three times). It NEVER mints a
 // signup-purpose key — that stays a one-time-per-member thing by design
 // (see claude.md's "Recovery keys have a purpose" section) — so a member
 // who somehow still needed first-enrollment access couldn't get it from
@@ -172,7 +181,7 @@ func (s *Server) TopUpRecoveryKeys(w http.ResponseWriter, r *http.Request) {
 	}
 
 	adminEmail := adminEmailFromContext(ctx)
-	_ = s.Store.LogAudit(ctx, kitID, "recovery_keys_topped_up", clientIP(r), map[string]any{"count": req.Count}, &adminEmail)
+	s.audit(r, kitID, "recovery_keys_topped_up", map[string]any{"count": req.Count}, &adminEmail)
 	writeJSON(w, http.StatusCreated, provisionedMember{KitID: kitID, RecoveryKeys: keys})
 }
 
@@ -256,7 +265,7 @@ func (s *Server) Ingest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = s.Store.LogAudit(ctx, kitID, "ingest", clientIP(r), map[string]any{"rowCount": len(rows), "filename": header.Filename}, &adminEmail)
+	s.audit(r, kitID, "ingest", map[string]any{"rowCount": len(rows), "filename": header.Filename}, &adminEmail)
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"batchId":  batchID.String(),
 		"rowCount": len(rows),
