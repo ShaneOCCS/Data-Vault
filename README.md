@@ -5,7 +5,7 @@ health data against a Kit ID rather than a name, so records can be stored and
 analyzed without holding identifying information. Records are encrypted before
 they reach the database.
 
-Capstone project ENG4001, Algonquin College.
+Capstone project ENG4001/ENG4003, Algonquin College.
 
 ## Overview
 
