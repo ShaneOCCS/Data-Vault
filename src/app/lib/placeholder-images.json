@@ -1,0 +1,17 @@
+
+{
+  "placeholderImages": [
+    {
+      "id": "hero-student",
+      "description": "A diverse group of students using technology in a modern campus setting",
+      "imageUrl": "https://picsum.photos/seed/student-auth/1200/800",
+      "imageHint": "student technology"
+    },
+    {
+      "id": "security-illustration",
+      "description": "Modern security and authentication conceptual illustration",
+      "imageUrl": "https://picsum.photos/seed/security/600/400",
+      "imageHint": "cyber security"
+    }
+  ]
+}
