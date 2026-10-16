@@ -8,8 +8,10 @@ package config
 import (
 	"encoding/base64"
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
+	"strings"
 )
 
 // Config holds every setting the server needs, already parsed and validated.
@@ -20,8 +22,9 @@ type Config struct {
 	UseKMS     bool
 	TOTPIssuer string
 
-	DatabaseURL string
-	SessionKey  []byte // decoded, >=32 bytes; signs both member and admin JWTs
+	DatabaseURL    string
+	SessionKey     []byte   // decoded, >=32 bytes; signs both member and admin JWTs
+	AllowedOrigins []string //cors allowlist, normalized to scheme://host[:port]; empty means no cross-origin access
 
 	LocalEncryptionKey []byte // exactly 32 bytes; only set/used when UseKMS is false
 	KMSKeyID           string // only set/used when UseKMS is true
@@ -105,7 +108,43 @@ func Load() (*Config, error) {
 		cfg.LocalEncryptionKey = localKey
 	}
 
+	origins, err := parseOrigins(os.Getenv("CORS_ALLOWED_ORIGINS"), cfg.IsProduction())
+	if err != nil {
+		return nil, err
+	}
+	cfg.AllowedOrigins = origins
+
 	return cfg, nil
+}
+
+func parseOrigins(raw string, isProd bool) ([]string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil 
+	}
+
+	var out []string
+	for _, part := range strings.Split(raw, ",") {
+		origin := strings.TrimSpace(part)
+		if origin == "" {
+			continue
+		}
+		if origin == "*" {
+			return nil, fmt.Errorf("config: CORS_ALLOWED_ORIGINS cannot be \"*\" — this API authenticates with cookies") 
+		}
+		u, err := url.Parse(origin)
+		if err != nil || u.Scheme == "" || u.Host == "" || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
+			return nil, fmt.Errorf("config: CORS_ALLOWED_ORIGINS entry %q must be scheme://host[:port] with no trailing slash or path", origin)
+		}
+		if u.Scheme != "http" && u.Scheme != "https" {
+			return nil, fmt.Errorf("config: CORS_ALLOWED_ORIGINS entry %q must use http or https", origin)
+		}
+		if isProd && u.Scheme != "https" {
+			return nil, fmt.Errorf("config: CORS_ALLOWED_ORIGINS entry %q must use https when APP_ENV=production", origin) 
+		}
+		out = append(out, u.Scheme+"://"+u.Host) 
+	}
+	return out, nil
 }
 
 // getEnvDefault returns the environment variable's value, or def if unset.

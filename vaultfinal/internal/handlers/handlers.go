@@ -84,7 +84,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/records", s.RequireSession(s.ListRecords))
 	mux.HandleFunc("GET /api/records/{id}", s.RequireSession(s.GetRecord))
 
-	return mux
+	return s.CORS(mux)
 }
 
 // writeJSON encodes v as the JSON response body with the given status code.
