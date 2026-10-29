@@ -2,13 +2,13 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { ShieldCheck, ArrowRight, CheckCircle2, Copy, Smartphone, AlertTriangle, AlertCircle, Check, Loader2, Download } from 'lucide-react';
+import { ArrowRight, Copy, AlertTriangle, AlertCircle, Check, Loader2, Download } from 'lucide-react';
+import { AuthCard, AuthNote } from '@/components/site/SiteShell';
 import { generateSecret, generateRecoveryKeys } from '@/app/lib/auth-store';
-import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -60,7 +60,7 @@ export function RegistrationFlow() {
       const account = await getAccount(kitId);
 
       if (!account) {
-        setError('Please use the Demo Credentials button on the login page to seed sample data first.');
+        setError("We couldn't find that KIT ID. Check the card that came with your kit.");
         return;
       }
 
@@ -134,163 +134,161 @@ export function RegistrationFlow() {
   // QR Code URL based on the unique secret
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=otpauth://totp/DataVault:${kitId}?secret=${secret}&issuer=DataVault`;
 
+  const errorAlert = error ? (
+    <Alert variant="destructive">
+      <AlertCircle className="h-4 w-4" />
+      <AlertDescription>{error}</AlertDescription>
+    </Alert>
+  ) : null;
+
+  const stepLabel = (n: number) => (isRelink ? `New phone · step ${n - 1} of 2` : `Step ${n} of 3`);
+
   if (step === 1) {
     return (
-      <Card className="w-full max-w-md shadow-lg border-primary/10 bg-white/80 backdrop-blur-sm">
-        <CardHeader className="space-y-1">
-          <div className="bg-primary/10 w-12 h-12 rounded-lg flex items-center justify-center mb-2"><ShieldCheck className="text-primary h-6 w-6" /></div>
-          <CardTitle className="text-2xl font-bold text-primary">{isRelink ? 'MFA Re-setup' : 'Vault Registration'}</CardTitle>
-          <CardDescription>Verify your KIT ID to initialize secure access.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <>
+        <AuthCard
+          step={stepLabel(1)}
+          title="Set up your account"
+          description="Enter the KIT ID and setup code from the card that came with your kit."
+          footer={
+            <Button onClick={handleVerify} disabled={loading || !kitId || !regCode} className="w-full h-11 font-semibold">
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Continue <ArrowRight className="ml-2 h-4 w-4" /></>}
+            </Button>
+          }
+        >
           <div className="space-y-2">
             <Label htmlFor="kitId">KIT ID</Label>
-            <Input 
-              id="kitId" 
-              placeholder="e.g. K12345" 
-              value={kitId} 
-              onChange={(e) => setKitId(e.target.value.toUpperCase())} 
-              disabled={isRelink} 
+            <Input
+              id="kitId"
+              placeholder="e.g. 7KQ4M2X"
+              className="h-11 font-mono tracking-wider"
+              value={kitId}
+              onChange={(e) => setKitId(e.target.value.toUpperCase())}
+              disabled={isRelink}
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="regCode">Registration Code</Label>
-            <Input 
-              id="regCode" 
-              placeholder="ABCD-1234" 
-              value={regCode} 
-              onChange={(e) => setRegCode(e.target.value.toUpperCase())} 
+            <Label htmlFor="regCode">Setup code</Label>
+            <Input
+              id="regCode"
+              placeholder="xxxxx-xxxxx-xxxxx-xxxxx"
+              className="h-11 font-mono tracking-wider"
+              value={regCode}
+              onChange={(e) => setRegCode(e.target.value.toUpperCase())}
+              onKeyDown={(e) => e.key === 'Enter' && handleVerify()}
             />
           </div>
-          {error && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{error}</AlertDescription></Alert>}
-        </CardContent>
-        <CardFooter className="flex flex-col gap-4">
-          <Button onClick={handleVerify} disabled={loading} className="w-full bg-primary font-bold h-11">
-            {loading ? <Loader2 className="animate-spin" /> : <>Verify Identity <ArrowRight className="ml-2 h-4 w-4" /></>}
-          </Button>
-          <Link href="/login" className="text-xs text-muted-foreground hover:text-primary transition-colors">
-            Already registered? Sign in here
-          </Link>
-        </CardFooter>
-      </Card>
+          {errorAlert}
+        </AuthCard>
+        <AuthNote>
+          Already set up? <Link href="/login" className="font-medium text-primary hover:underline">Sign in</Link>
+        </AuthNote>
+      </>
     );
   }
 
   if (step === 2) {
     return (
-      <Card className="w-full max-w-md shadow-lg border-primary/10 bg-white/80 backdrop-blur-sm">
-        <CardHeader className="text-center">
-          <div className="flex justify-center mb-4"><div className="bg-accent/10 p-3 rounded-full"><Smartphone className="h-8 w-8 text-primary" /></div></div>
-          <CardTitle className="text-2xl font-bold text-primary">Secure Multi-Factor</CardTitle>
-          <CardDescription>Scan this QR code with Microsoft or Google Authenticator.</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col items-center space-y-6">
-          <div className="p-4 bg-white rounded-xl border-2 border-dashed border-primary/20">
-            <img src={qrUrl} alt="QR" className="w-48 h-48" />
-          </div>
-          <div className="w-full bg-muted/50 p-4 rounded-lg space-y-2">
-            <p className="text-[10px] font-black text-muted-foreground uppercase text-center">Manual Entry Secret</p>
-            <div className="flex items-center justify-between bg-white border rounded px-3 py-2">
-              <code className="text-primary font-mono text-sm font-bold">{secret}</code>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => copyToClipboard(secret)}>
-                {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-        <CardFooter>
-          <Button onClick={handleComplete} disabled={loading} className="w-full bg-primary font-bold h-11">
-            {loading ? <Loader2 className="animate-spin" /> : "I've Scanned the QR Code"}
+      <AuthCard
+        step={stepLabel(2)}
+        title="Connect your authenticator app"
+        description="Open Google Authenticator or Microsoft Authenticator, tap + and scan this code."
+        footer={
+          <Button onClick={handleComplete} disabled={loading} className="w-full h-11 font-semibold">
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "I've scanned it"}
           </Button>
-        </CardFooter>
-      </Card>
+        }
+      >
+        <div className="flex justify-center">
+          <div className="rounded-xl border p-3">
+            <img src={qrUrl} alt="QR code for your authenticator app" className="h-44 w-44" />
+          </div>
+        </div>
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">Can't scan? Type this key into the app instead:</p>
+          <div className="flex items-center justify-between gap-2 rounded-lg border bg-muted/40 px-3 py-2">
+            <code className="font-mono text-sm font-semibold break-all">{secret}</code>
+            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => copyToClipboard(secret)} aria-label="Copy key">
+              {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+            </Button>
+          </div>
+        </div>
+        {errorAlert}
+      </AuthCard>
     );
   }
 
   return (
-    <Card className="w-full max-w-md shadow-lg border-primary/10 bg-white/80 backdrop-blur-sm">
-      <CardContent className="pt-10 flex flex-col items-center text-center space-y-6">
-        <div className="bg-green-100 p-4 rounded-full"><CheckCircle2 className="h-16 w-16 text-green-600" /></div>
-        <h2 className="text-2xl font-bold text-primary">Security Setup Complete</h2>
-        <div className="w-full space-y-4">
-          <Alert className="bg-amber-50 border-amber-200">
-            <AlertTriangle className="h-4 w-4 text-amber-600" />
-            <AlertTitle className="text-amber-700 font-bold">Action Required: Save Keys</AlertTitle>
-          </Alert>
-          <div className="grid gap-2 p-4 bg-muted/50 rounded-lg border font-mono text-primary font-bold">
-            {recoveryKeys.map((key, i) => (
-              <div key={i} className="bg-white p-2 px-4 rounded border flex justify-between items-center">
-                <span>{key}</span>
-                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => copyToClipboard(key)}>
-                  <Copy className="h-3 w-3" />
-                </Button>
-              </div>
-            ))}
-          </div>
-          <Button
-            variant="outline"
-            className="w-full border-primary/20 text-primary font-bold"
-            onClick={downloadKeysAsTxt}
-          >
-            <Download className="mr-2 h-4 w-4" /> Download Keys as .txt
-          </Button>
-        </div>
-        <Button 
-          className="w-full bg-primary font-bold h-12" 
-          onClick={() => setShowConfirmDialog(true)}
-        >
-          Next <ArrowRight className="ml-2 h-4 w-4" />
-        </Button>
-      </CardContent>
+    <>
+      <AuthCard
+        step={stepLabel(3)}
+        title="Save your recovery keys"
+        description="If you lose your phone, one of these keys gets you back in. Each works once. We can't show them again."
+        footer={
+          <>
+            <Button variant="outline" className="w-full h-11 font-semibold" onClick={downloadKeysAsTxt}>
+              <Download className="mr-2 h-4 w-4" /> Download as .txt
+            </Button>
+            <Button className="w-full h-11 font-semibold" onClick={() => setShowConfirmDialog(true)}>
+              I've saved them <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </>
+        }
+      >
+        <ul className="divide-y rounded-xl border">
+          {recoveryKeys.map((key, i) => (
+            <li key={i} className="flex items-center justify-between px-4 py-2.5">
+              <span className="font-mono text-sm font-semibold tracking-wider">{key}</span>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => copyToClipboard(key)} aria-label="Copy key">
+                <Copy className="h-4 w-4" />
+              </Button>
+            </li>
+          ))}
+        </ul>
+      </AuthCard>
 
       <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <AlertDialogContent>
+        <AlertDialogContent className="rounded-2xl">
           <AlertDialogHeader>
-            <div className="flex justify-center mb-2">
-              <div className="bg-amber-100 p-3 rounded-full">
-                <AlertTriangle className="h-8 w-8 text-amber-600" />
-              </div>
+            <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-amber-50">
+              <AlertTriangle className="h-6 w-6 text-amber-600" />
             </div>
-            <AlertDialogTitle className="text-center text-xl">
-              Are you sure you've saved your keys?
+            <AlertDialogTitle className="text-center text-lg font-semibold">
+              Have you saved your keys?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-center">
-              If you lose these recovery keys, you will <span className="font-bold text-destructive">not</span> be able to recover your account. Data Vault cannot restore access without them.
+              Without them, a lost phone means you can't get back into your account. We can't reset it for you.
             </AlertDialogDescription>
           </AlertDialogHeader>
 
-          <div className="flex items-start space-x-3 text-left p-4 bg-amber-50 rounded-lg border border-amber-200">
+          <div className="flex items-start gap-3 rounded-xl border p-4">
             <Checkbox
               id="confirm-saved"
               checked={confirmChecked}
               onCheckedChange={(checked) => setConfirmChecked(checked === true)}
             />
-            <Label htmlFor="confirm-saved" className="text-xs font-medium cursor-pointer">
-              Yes, I understand. I have saved my recovery keys securely and I accept that losing them means losing access to my account.
+            <Label htmlFor="confirm-saved" className="text-sm font-normal leading-snug cursor-pointer">
+              I've saved my recovery keys somewhere safe.
             </Label>
           </div>
 
           <AlertDialogFooter className="flex-col sm:flex-col gap-2">
-            <Button
-              className="w-full bg-primary font-bold h-11"
-              disabled={!confirmChecked}
-              onClick={() => router.push('/login')}
-            >
-              Finish & Return to Login
+            <Button className="w-full h-11 font-semibold" disabled={!confirmChecked} onClick={() => router.push('/login')}>
+              Finish and sign in
             </Button>
             <Button
               variant="outline"
-              className="w-full"
+              className="w-full h-11"
               onClick={() => {
                 setShowConfirmDialog(false);
                 setConfirmChecked(false);
               }}
             >
-              Go Back
+              Go back
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </Card>
+    </>
   );
 }

@@ -1,30 +1,46 @@
 'use client';
 
 import { RegistrationFlow } from '@/components/auth/RegistrationFlow';
-import { Shield } from 'lucide-react';
-import Link from 'next/link';
 import { Suspense } from 'react';
-import { Button } from '@/components/ui/button';
+import { useSearchParams } from 'next/navigation';
+import { AuthShell, type AuthPanel } from '@/components/site/SiteShell';
+
+function RegisterContent() {
+  const searchParams = useSearchParams();
+  const isRelink = searchParams.get('relink') === 'true';
+
+  const panel: AuthPanel = isRelink
+    ? {
+        title: 'Connect your new phone',
+        intro: 'Your recovery key worked. Two quick steps left:',
+        points: [
+          { title: 'Scan the new QR code', body: 'Use Google Authenticator or Microsoft Authenticator on your new phone.' },
+          { title: 'Save your new recovery keys', body: 'You get a fresh set. The old ones stop working.' },
+        ],
+        help: <>Your records are safe. Only the way you sign in is changing.</>,
+      }
+    : {
+        title: 'Set up in about 2 minutes',
+        intro: 'Have these ready before you start:',
+        points: [
+          { title: 'Your kit card', body: 'It has your KIT ID and a one-time setup code.' },
+          { title: 'Your phone', body: 'With Google Authenticator or Microsoft Authenticator installed. Both are free.' },
+          { title: 'Somewhere to save keys', body: 'At the end you get recovery keys. Download them or write them down.' },
+        ],
+        help: <>No email, name or password needed. Your KIT ID is all that identifies you.</>,
+      };
+
+  return (
+    <AuthShell panel={panel}>
+      <RegistrationFlow />
+    </AuthShell>
+  );
+}
 
 export default function RegisterPage() {
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <header className="p-6 flex justify-between items-center">
-        <Link href="/" className="flex items-center gap-2 w-fit">
-          <div className="bg-primary p-1.5 rounded-lg">
-            <Shield className="h-6 w-6 text-white" />
-          </div>
-          <span className="font-headline font-bold text-xl text-primary">Data Vault</span>
-        </Link>
-      </header>
-      
-      <main className="flex-1 flex items-center justify-center px-6 py-12">
-        <div className="w-full flex flex-col items-center gap-8">
-          <Suspense fallback={<div className="text-center">Initializing Setup...</div>}>
-            <RegistrationFlow />
-          </Suspense>
-        </div>
-      </main>
-    </div>
+    <Suspense fallback={<div className="min-h-screen bg-background" />}>
+      <RegisterContent />
+    </Suspense>
   );
 }

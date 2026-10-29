@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Shield, LogOut, Users, Trash2, UserPlus, Loader2, AlertCircle, Upload, FileText, IdCard, Search, ScanLine, X } from 'lucide-react';
+import { SiteHeader, SiteFooter } from '@/components/site/SiteShell';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -88,14 +89,14 @@ export default function AdminDashboardPage() {
   }, [router]);
 
   const handleLogout = () => {
-    toast({ variant: 'success', title: 'Signed Out', description: 'Please log back in whenever you need admin access.' });
+    toast({ variant: 'success', title: 'Signed Out', description: 'You have been signed out.' });
     clearAdminSession();
     setTimeout(() => router.push('/admin/login'), 500);
   };
 
   const handleAddAdmin = async () => {
     if (!newName || !newEmail || !newPassword) {
-      setAddError('Please fill in the name, email, and password to continue.');
+      setAddError('Fill in name, email and password.');
       return;
     }
     setAdding(true);
@@ -106,7 +107,7 @@ export default function AdminDashboardPage() {
       setAddError(result.error || "Please try again — we couldn't add this admin.");
       return;
     }
-    toast({ variant: 'success', title: 'Admin Added', description: `Please share the new login with ${newEmail} — they can sign in now.` });
+    toast({ variant: 'success', title: 'Admin Added', description: `${newEmail} can sign in now.` });
     setNewName('');
     setNewEmail('');
     setNewPassword('');
@@ -115,13 +116,13 @@ export default function AdminDashboardPage() {
 
   const handleRemoveAdmin = async (email: string) => {
     await removeAdmin(email);
-    toast({ variant: 'success', title: 'Admin Removed', description: `Please note — ${email} no longer has access.` });
+    toast({ variant: 'success', title: 'Admin Removed', description: `${email} no longer has access.` });
     loadAdmins();
   };
 
   const handleUploadClick = () => {
     if (!selectedKitId) {
-      setUploadError('Please select a KIT ID before uploading a file.');
+      setUploadError('Select a KIT ID first.');
       return;
     }
     setUploadError('');
@@ -139,14 +140,14 @@ export default function AdminDashboardPage() {
       setUploadError(result.error || "Please try again — we couldn't upload that file.");
       return;
     }
-    toast({ variant: 'success', title: 'Document Uploaded', description: `Please note — ${selectedKitId} can now access "${file.name}".` });
+    toast({ variant: 'success', title: 'Document Uploaded', description: `${selectedKitId} can now download "${file.name}".` });
     loadDocuments();
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleDeleteDocument = async (id: string, fileName: string) => {
     await deleteDocument(id);
-    toast({ variant: 'success', title: 'Document Removed', description: `Please note — "${fileName}" is no longer available for download.` });
+    toast({ variant: 'success', title: 'Document Removed', description: `"${fileName}" was removed.` });
     loadDocuments();
   };
 
@@ -159,8 +160,8 @@ export default function AdminDashboardPage() {
         variant: 'success',
         title: nextActive ? 'KIT ID Activated' : 'KIT ID Deactivated',
         description: nextActive
-          ? `Please note — ${acc.kitId} can log in again.`
-          : `Please note — ${acc.kitId} can no longer log in. Admins can still upload files for it.`,
+          ? `${acc.kitId} can sign in again.`
+          : `${acc.kitId} can no longer sign in. You can still upload files for it.`,
       });
       loadAccounts();
     } finally {
@@ -177,7 +178,7 @@ export default function AdminDashboardPage() {
       toast({ variant: 'success', title: 'KIT ID Scanned', description: `Selected ${match.kitId} — ${match.name}.` });
     } else {
       setUploadKitSearch(normalized);
-      toast({ variant: 'destructive', title: 'No Match Found', description: `"${normalized}" doesn't match any known KIT ID. Please check and try again.` });
+      toast({ variant: 'destructive', title: 'No Match Found', description: `"${normalized}" doesn't match any KIT ID.` });
     }
   };
 
@@ -200,28 +201,29 @@ export default function AdminDashboardPage() {
   };
 
   if (!checked) {
-    return <div className="flex items-center justify-center h-screen text-muted-foreground">Checking access...</div>;
+    return <div className="min-h-screen bg-background" />;
   }
 
   return (
-    <div className="min-h-screen bg-[#F4F6F9]">
-      <header className="bg-white border-b px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="bg-primary p-1.5 rounded-lg"><Shield className="h-5 w-5 text-white" /></div>
-          <span className="font-bold text-lg text-primary tracking-tighter uppercase">Data Vault Admin</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-muted-foreground">{admin?.email}</span>
-          <Button variant="outline" size="sm" onClick={handleLogout}>
-            <LogOut className="h-4 w-4 mr-2" /> Sign Out
-          </Button>
-        </div>
-      </header>
+    <div className="min-h-screen flex flex-col bg-background">
+      <SiteHeader
+        wide
+        logoHref="/admin/dashboard"
+        right={
+          <>
+            <span className="hidden sm:inline rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">Staff</span>
+            <span className="hidden md:inline text-sm text-muted-foreground">{admin?.email}</span>
+            <Button variant="outline" size="sm" onClick={handleLogout}>
+              <LogOut className="h-4 w-4 mr-2" /> Sign out
+            </Button>
+          </>
+        }
+      />
 
-      <main className="p-6 max-w-6xl mx-auto space-y-6">
+      <main className="flex-1 w-full px-4 sm:px-6 py-8 max-w-6xl mx-auto space-y-6">
         <div>
-          <h1 className="text-2xl font-bold">Welcome, {admin?.name}</h1>
-          <p className="text-muted-foreground">Manage admin access, KIT IDs, and shared documents below.</p>
+          <h1 className="text-2xl font-semibold tracking-tight">Admin dashboard</h1>
+          <p className="text-sm text-muted-foreground mt-1">Signed in as {admin?.email}. Manage admins, KIT IDs and documents.</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -231,7 +233,7 @@ export default function AdminDashboardPage() {
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{admins.length}</div>
+              <div className="text-3xl font-semibold tracking-tight">{admins.length}</div>
               <CardDescription>With portal access</CardDescription>
             </CardContent>
           </Card>
@@ -242,7 +244,7 @@ export default function AdminDashboardPage() {
               <IdCard className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{accounts.length}</div>
+              <div className="text-3xl font-semibold tracking-tight">{accounts.length}</div>
               <CardDescription>{accounts.filter((a) => a.registered).length} registered</CardDescription>
             </CardContent>
           </Card>
@@ -253,7 +255,7 @@ export default function AdminDashboardPage() {
               <FileText className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{documents.length}</div>
+              <div className="text-3xl font-semibold tracking-tight">{documents.length}</div>
               <CardDescription>Shared with KIT IDs</CardDescription>
             </CardContent>
           </Card>
@@ -261,8 +263,8 @@ export default function AdminDashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Manage Admins</CardTitle>
-            <CardDescription>Add or remove admin logins.</CardDescription>
+            <CardTitle>Admins</CardTitle>
+            <CardDescription>People who can sign in to this dashboard.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {addError && (
@@ -285,7 +287,7 @@ export default function AdminDashboardPage() {
                 <Input id="new-password" type="password" placeholder="••••••••" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
               </div>
               <Button onClick={handleAddAdmin} disabled={adding} className="h-10">
-                {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <><UserPlus className="h-4 w-4 mr-2" /> Add Admin</>}
+                {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <><UserPlus className="h-4 w-4 mr-2" /> Add admin</>}
               </Button>
             </div>
 
@@ -316,8 +318,8 @@ export default function AdminDashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Registered KIT IDs</CardTitle>
-            <CardDescription>Please review everyone who has a vault account, and activate or deactivate their login access.</CardDescription>
+            <CardTitle>KIT IDs</CardTitle>
+            <CardDescription>Everyone with a vault account. Turn sign-in on or off for each one.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="relative">
@@ -342,7 +344,7 @@ export default function AdminDashboardPage() {
 
             <div className="border rounded-lg divide-y">
               {accounts.length === 0 && (
-                <div className="p-6 text-center text-sm text-muted-foreground">No KIT IDs yet. Please seed or register one first.</div>
+                <div className="p-6 text-center text-sm text-muted-foreground">No KIT IDs yet.</div>
               )}
               {accounts.length > 0 && filteredAccounts.length === 0 && (
                 <div className="p-6 text-center text-sm text-muted-foreground">No KIT IDs match "{kitSearch}".</div>
@@ -355,12 +357,12 @@ export default function AdminDashboardPage() {
                       <div className="bg-primary/10 p-2 rounded-lg shrink-0"><IdCard className="h-4 w-4 text-primary" /></div>
                       <div className="min-w-0">
                         <p className="font-medium text-sm truncate">{acc.name}</p>
-                        <p className="text-xs text-muted-foreground">{acc.kitId}</p>
+                        <p className="text-xs font-mono text-muted-foreground">{acc.kitId}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
-                      <span className={`text-xs px-2 py-1 rounded-full font-medium ${acc.registered ? 'bg-accent/10 text-accent' : 'bg-muted text-muted-foreground'}`}>
-                        {acc.registered ? 'Registered' : 'Pending Setup'}
+                      <span className={`hidden sm:inline text-xs px-2 py-1 rounded-full font-medium ${acc.registered ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                        {acc.registered ? 'Set up' : 'Not set up yet'}
                       </span>
                       <span className={`text-xs px-2 py-1 rounded-full font-medium ${active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                         {active ? 'Active' : 'Inactive'}
@@ -388,9 +390,9 @@ export default function AdminDashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>KIT ID Documents</CardTitle>
+            <CardTitle>Documents</CardTitle>
             <CardDescription>
-              Please upload a PDF or file to a KIT ID — its owner will see it as a download on their personal dashboard.
+              Upload a PDF or file to a KIT ID. Its owner sees it as a download on their dashboard.
               Deactivated KIT IDs can still receive uploads; they just can't log in to view them until reactivated.
             </CardDescription>
           </CardHeader>
@@ -490,6 +492,7 @@ export default function AdminDashboardPage() {
         onOpenChange={setScannerOpen}
         onScan={handleBarcodeScan}
       />
+      <SiteFooter showStaffLink={false} />
     </div>
   );
 }
