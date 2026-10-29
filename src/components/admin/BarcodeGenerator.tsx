@@ -115,9 +115,9 @@ export function BarcodeGenerator({ accounts }: BarcodeGeneratorProps) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <ScanBarcode className="h-5 w-5" /> Generate KIT ID Barcodes
+          <ScanBarcode className="h-5 w-5 text-muted-foreground" /> Barcode labels
         </CardTitle>
-        <CardDescription>Please generate a printable barcode for one KIT ID, or a whole batch at once.</CardDescription>
+        <CardDescription>Print a barcode label for one KIT ID or a whole batch.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-8">
         {/* Single generation */}

@@ -3,36 +3,35 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Shield, Mail, KeyRound, Loader2, AlertCircle } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+import { Loader2, AlertCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { useToast } from '@/hooks/use-toast';
-import { verifyAdminLogin, setAdminSession, seedDemoAdmins } from '@/app/lib/admin-store';
+import { verifyAdminLogin, setAdminSession } from '@/app/lib/admin-store';
+import { AuthShell, AuthCard, AuthNote, type AuthPanel } from '@/components/site/SiteShell';
+
+const panel: AuthPanel = {
+  title: 'Staff access',
+  intro: 'For clinic and admin staff only.',
+  points: [
+    { title: 'Create KIT IDs', body: 'Generate KIT IDs and setup codes for new kits.' },
+    { title: 'Share results', body: 'Upload documents to a KIT ID so its owner can download them.' },
+    { title: 'Manage access', body: 'Turn sign-in on or off for any KIT ID.' },
+  ],
+  help: <>Need an account? Ask an existing admin to send you an invite.</>,
+};
 
 export default function AdminLoginPage() {
   const router = useRouter();
-  const { toast } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleReset = async () => {
-    try {
-      await seedDemoAdmins();
-      toast({ variant: 'success', title: "You're All Set", description: 'Please go ahead — the demo admin account is ready to use.' });
-    } catch {
-      toast({ variant: 'destructive', title: 'Please Try Again', description: "We couldn't write to local storage." });
-    }
-  };
-
   const handleLogin = async () => {
     if (!email || !password) {
-      setError('Please enter both your email and password to continue.');
+      setError('Enter your email and password.');
       return;
     }
     setLoading(true);
@@ -40,98 +39,66 @@ export default function AdminLoginPage() {
     try {
       const admin = await verifyAdminLogin(email, password);
       if (!admin) {
-        setError('Please double-check your email and password and try again.');
+        setError('That email and password don’t match. Try again.');
         setLoading(false);
         return;
       }
       setAdminSession(admin);
       router.push('/admin/dashboard');
     } catch {
-      setError("Please try again — we couldn't log you in.");
+      setError('We couldn’t reach the server. Try again in a moment.');
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <header className="p-6 flex justify-between items-center">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="bg-primary p-1.5 rounded-lg"><Shield className="h-6 w-6 text-white" /></div>
-          <span className="font-bold text-xl text-primary tracking-tighter uppercase">Data Vault</span>
-        </Link>
-        <Popover>
-          <PopoverTrigger asChild><Button variant="outline" size="sm">Demo Credentials</Button></PopoverTrigger>
-          <PopoverContent className="w-80">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="font-bold text-sm">Demo Admin Login</h4>
-                <Button variant="ghost" size="sm" onClick={handleReset} className="text-xs text-primary">INITIALIZE DB</Button>
-              </div>
-              <div className="space-y-2 text-xs">
-                <div className="p-2 bg-muted rounded">
-                  <p>Email: <code>admin@gmail.com</code></p>
-                  <p>Password: <code>Admin123!</code></p>
-                </div>
-              </div>
-            </div>
-          </PopoverContent>
-        </Popover>
-      </header>
-
-      <main className="flex-1 flex items-center justify-center px-6 py-12">
-        <Card className="w-full max-w-sm">
-          <CardHeader className="text-center">
-            <div className="mx-auto bg-primary/10 p-3 rounded-full w-fit mb-2">
-              <Shield className="h-6 w-6 text-primary" />
-            </div>
-            <CardTitle>Admin Portal</CardTitle>
-            <CardDescription>Sign in with your admin email and password.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {error && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="admin@gmail.com"
-                  className="pl-9"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <div className="relative">
-                <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  className="pl-9"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-                />
-              </div>
-            </div>
-          </CardContent>
-          <CardFooter>
-            <Button className="w-full" onClick={handleLogin} disabled={loading}>
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Sign In'}
-            </Button>
-          </CardFooter>
-        </Card>
-      </main>
-    </div>
+    <AuthShell showStaffLink={false} panel={panel}>
+      <AuthCard
+        step="Staff"
+        title="Staff sign in"
+        description="For clinic and admin staff. Patients sign in with their KIT ID instead."
+        footer={
+          <Button className="w-full h-11 font-semibold" onClick={handleLogin} disabled={loading}>
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Sign in'}
+          </Button>
+        }
+      >
+        <div className="space-y-2">
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            type="email"
+            autoComplete="username"
+            placeholder="name@clinic.com"
+            className="h-11"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="password">Password</Label>
+          <Input
+            id="password"
+            type="password"
+            autoComplete="current-password"
+            placeholder="••••••••"
+            className="h-11"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+          />
+        </div>
+        {error && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+      </AuthCard>
+      <AuthNote>
+        Not staff? <Link href="/login" className="font-medium text-primary hover:underline">Patient sign in</Link>
+      </AuthNote>
+    </AuthShell>
   );
 }

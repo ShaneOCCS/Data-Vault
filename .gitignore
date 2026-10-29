@@ -1,0 +1,20 @@
+# dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+build/
+
+# env files (secrets)
+.env
+.env*.local
+
+# misc
+*.tsbuildinfo
+npm-debug.log*
+.DS_Store
+.vercel
+
+# local mock database written by /api/kv
+.data/
