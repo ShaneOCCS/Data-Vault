@@ -64,14 +64,21 @@ export async function removeAdmin(email: string): Promise<void> {
   await writeAll(admins);
 }
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+
 export async function verifyAdminLogin(email: string, password: string): Promise<Admin | null> {
-  await tick();
-  const admins = await readAll();
-  const admin = admins[email.toLowerCase()];
-  if (admin && admin.password === password) {
-    return admin;
+  const res = await fetch(`${API_URL}/api/admin/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) {
+    if (res.status >= 500) throw new Error(`server error ${res.status}`);
+    return null;
   }
-  return null;
+  const data = await res.json();
+  return { email: data.email, password: '', name: data.email };
 }
 
 export function setAdminSession(admin: Admin) {
