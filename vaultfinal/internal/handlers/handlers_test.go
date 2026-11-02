@@ -47,6 +47,10 @@ func TestClientIP(t *testing.T) {
 	if got := clientIP(r); got != "192.0.2.9" {
 		t.Fatalf("got %q", got)
 	}
+	r.RemoteAddr = "[::1]:5555"
+	if got := clientIP(r); got != "::1" {
+		t.Fatalf("IPv6: got %q, want ::1 (no brackets)", got)
+	}
 	r.Header.Set("X-Forwarded-For", " 198.51.100.7 , 10.0.0.1")
 	if got := clientIP(r); got != "198.51.100.7" {
 		t.Fatalf("got %q", got)
@@ -55,9 +59,120 @@ func TestClientIP(t *testing.T) {
 
 func TestDecodeJSONRejectsUnknownFields(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"count":1,"admin":true}`))
+	r.Header.Set("Content-Type", "application/json")
 	var dst provisionRequest
 	if err := decodeJSON(httptest.NewRecorder(), r, &dst); err == nil {
 		t.Fatal("unknown field accepted")
+	}
+}
+
+func TestDecodeJSONRejectsMissingContentType(t *testing.T) {
+	r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"count":1}`))
+	var dst provisionRequest
+	if err := decodeJSON(httptest.NewRecorder(), r, &dst); err == nil {
+		t.Fatal("missing Content-Type accepted")
+	}
+}
+
+func TestDecodeJSONRejectsWrongContentType(t *testing.T) {
+	r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"count":1}`))
+	r.Header.Set("Content-Type", "text/plain")
+	var dst provisionRequest
+	if err := decodeJSON(httptest.NewRecorder(), r, &dst); err == nil {
+		t.Fatal("non-JSON Content-Type accepted")
+	}
+}
+
+func TestCORSAllowedOriginPreflight(t *testing.T) {
+	s := &Server{Config: &config.Config{AllowedOrigins: []string{"http://localhost:9002"}}}
+	called := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { called = true })
+	r := httptest.NewRequest(http.MethodOptions, "/api/auth/login", nil)
+	r.Header.Set("Origin", "http://localhost:9002")
+	r.Header.Set("Access-Control-Request-Method", "POST")
+	w := httptest.NewRecorder()
+	s.CORS(next).ServeHTTP(w, r)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("got status %d, want 204", w.Code)
+	}
+	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "http://localhost:9002" {
+		t.Fatalf("Allow-Origin = %q", got)
+	}
+	if w.Header().Get("Access-Control-Allow-Credentials") != "true" {
+		t.Fatal("missing Allow-Credentials")
+	}
+	if called {
+		t.Fatal("preflight should not reach the wrapped handler")
+	}
+}
+
+func TestCORSDisallowedOriginPreflight(t *testing.T) {
+	s := &Server{Config: &config.Config{AllowedOrigins: []string{"http://localhost:9002"}}}
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+	r := httptest.NewRequest(http.MethodOptions, "/api/auth/login", nil)
+	r.Header.Set("Origin", "https://evil.example")
+	r.Header.Set("Access-Control-Request-Method", "POST")
+	w := httptest.NewRecorder()
+	s.CORS(next).ServeHTTP(w, r)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("got status %d, want 403", w.Code)
+	}
+	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("Allow-Origin should be empty, got %q", got)
+	}
+}
+
+func TestCORSDisallowedOriginPOSTRejected(t *testing.T) {
+	s := &Server{Config: &config.Config{AllowedOrigins: []string{"http://localhost:9002"}}}
+	called := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { called = true })
+	r := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{}`))
+	r.Header.Set("Origin", "https://evil.example")
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.CORS(next).ServeHTTP(w, r)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("got status %d, want 403", w.Code)
+	}
+	if called {
+		t.Fatal("POST from a disallowed origin reached the handler")
+	}
+}
+
+func TestCORSDisallowedOriginGETPassesThrough(t *testing.T) {
+	s := &Server{Config: &config.Config{AllowedOrigins: []string{"http://localhost:9002"}}}
+	called := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+	r := httptest.NewRequest(http.MethodGet, "/api/session/me", nil)
+	r.Header.Set("Origin", "https://evil.example")
+	w := httptest.NewRecorder()
+	s.CORS(next).ServeHTTP(w, r)
+	if !called {
+		t.Fatal("GET from a disallowed origin should still reach the handler")
+	}
+	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("Allow-Origin should be empty, got %q", got)
+	}
+}
+
+func TestCORSNoOriginHeaderPassesThroughUnchanged(t *testing.T) {
+	s := &Server{Config: &config.Config{AllowedOrigins: []string{"http://localhost:9002"}}}
+	called := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+	r := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{}`))
+	w := httptest.NewRecorder()
+	s.CORS(next).ServeHTTP(w, r)
+	if !called {
+		t.Fatal("request without an Origin header should reach the handler unchanged")
+	}
+	if w.Code != http.StatusOK {
+		t.Fatalf("got status %d, want 200", w.Code)
 	}
 }
 

@@ -23,6 +23,7 @@ APP_ENV=production
 USE_KMS=true
 KMS_KEY_ID=alias/vault
 PORT=8080
+CORS_ALLOWED_ORIGINS=http://localhost:9002
 EOF
 
 chown vaultapp:vaultapp "$ENV_FILE"
