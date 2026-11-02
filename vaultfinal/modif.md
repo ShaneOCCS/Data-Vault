@@ -270,3 +270,45 @@ UPDATE recovery_keys SET used_at = now() WHERE id = $1 AND used_at IS NULL
 - `go run ./cmd/migrate status | up | up | baseline 9999_x` was run against a scratch database. It listed all files as pending, applied 0001–0005, reported "up to date" on the second run and rejected the unknown version.
 - The race detector (`-race`) was **not** run, because this Windows machine has no cgo toolchain.
 - The changes have not been run on the EC2/RDS deployment.
+
+---
+
+## 4. CORS support for a cross-origin frontend (Phase 1)
+
+**Date:** 2026-11-02
+
+### What changed
+
+The API now enforces an explicit CORS origin allowlist instead of being same-origin-only, so the Next.js frontend can be served from a different origin (e.g. `http://localhost:9002` during development, a production domain later) and still call this API with cookies.
+
+- New `CORS_ALLOWED_ORIGINS` env var (comma-separated bare origins, `scheme://host[:port]`). Empty/unset is a no-op (today's same-origin deployment behavior is unchanged).
+- New middleware wraps every route (`Routes()` now returns `s.CORS(mux)`): answers preflight `OPTIONS` requests, sets `Access-Control-Allow-Origin`/`-Credentials` for allowed origins, and rejects `POST` requests whose `Origin` header isn't on the allowlist (CSRF defense-in-depth).
+- `decodeJSON` now requires `Content-Type: application/json`, closing the gap where a cross-site form POST under a non-preflighted Content-Type (`text/plain`, `multipart/form-data`, etc.) could reach the JSON decoder without ever triggering a CORS preflight.
+- `*` is rejected outright as a value for `CORS_ALLOWED_ORIGINS` — this API authenticates with cookies, so a wildcard origin would defeat the point of the allowlist.
+- In production (`APP_ENV=production`), every origin must be `https://`, **except `http://localhost`**, which is explicitly allowed so the deployed, production-mode server can still be exercised from a local frontend dev server over an SSH tunnel.
+
+### Why
+
+The frontend (`frontend-kp`, Next.js) and this API are deployed separately, so a browser request between them is cross-origin by default and the browser blocks it unless the API opts in via CORS headers.
+
+### Files changed
+
+- `internal/config/config.go` — added `AllowedOrigins []string` to `Config`; added `parseOrigins(raw string, isProd bool) ([]string, error)` with the validation rules above; wired into `Load()`.
+- `internal/handlers/cors.go` (**new**) — the `Server.CORS` middleware.
+- `internal/handlers/handlers.go` — `Routes()` now wraps the mux in `s.CORS(...)`; `decodeJSON` enforces `Content-Type: application/json`.
+- `internal/handlers/handlers_test.go` — `TestDecodeJSONRejectsUnknownFields` updated to set `Content-Type` explicitly; added `TestDecodeJSONRejectsMissingContentType`, `TestDecodeJSONRejectsWrongContentType`, `TestCORSAllowedOriginPreflight`, `TestCORSDisallowedOriginPreflight`, `TestCORSDisallowedOriginPOSTRejected`, `TestCORSDisallowedOriginGETPassesThrough`, `TestCORSNoOriginHeaderPassesThroughUnchanged`.
+- `deploy/fetch-secrets.sh` — writes `CORS_ALLOWED_ORIGINS=http://localhost:9002` into `/etc/vaultfinal/vaultfinal.env` on the server.
+- `.env.example` — documents `CORS_ALLOWED_ORIGINS`.
+
+### What did *not* change
+
+- Same-origin deployments: with `CORS_ALLOWED_ORIGINS` unset, every request behaves exactly as before (middleware is a no-op).
+- Cookie `SameSite` attribute — still `Lax`. Moving to `SameSite=None` is Phase 2, once the frontend is served from a real domain over HTTPS (a `Secure` cookie can't use `SameSite=None` over plain `http://localhost`).
+- No `nginx`/TLS/domain changes — that's Phase 2.
+
+### Verification
+
+- `gofmt -l .`, `go build ./...`, `go vet ./...` all clean.
+- `go test ./... -v -run "CORS|DecodeJSON"` — all new/modified tests pass.
+- `go test ./...` — full existing suite passes unchanged.
+- Not yet run against the live EC2 deployment (next step).

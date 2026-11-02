@@ -8,7 +8,9 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"strings"
 
@@ -84,7 +86,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/records", s.RequireSession(s.ListRecords))
 	mux.HandleFunc("GET /api/records/{id}", s.RequireSession(s.GetRecord))
 
-	return mux
+	return s.CORS(mux)
 }
 
 // writeJSON encodes v as the JSON response body with the given status code.
@@ -162,18 +164,33 @@ func clientIP(r *http.Request) string {
 		first, _, _ := strings.Cut(fwd, ",")
 		return strings.TrimSpace(first)
 	}
-	host := r.RemoteAddr
-	if idx := strings.LastIndex(host, ":"); idx != -1 {
-		host = host[:idx]
+	// SplitHostPort (not "cut at the last colon") so an IPv6 RemoteAddr like
+	// "[::1]:5555" yields "::1" — the brackets would make the audit_log
+	// insert fail, since ip_address is an inet column.
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
 	}
 	return host
 }
 
 // decodeJSON reads and JSON-decodes the request body into dst, capping the
-// body at 1MB — every JSON request in this API is small (IDs, counts,
+// body at 1MB -- every JSON request in this API is small (IDs, counts,
 // codes); a large body here would only ever be a mistake or an abuse
 // attempt.
+//
+// It also requires Content-Type: application/json (CORS.md section 5,
+// point 2). Without this, a cross-site form POST under a Content-Type that
+// never triggers a CORS preflight (text/plain,
+// application/x-www-form-urlencoded, multipart/form-data) could reach this
+// decoder, so the Origin check in cors.go would never get a chance to
+// block it. Requiring this exact Content-Type forces a preflight on every
+// real call. Callers treat a bad Content-Type the same as any other decode
+// failure, via their existing badRequest(...) call.
 func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
+	if ct := r.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		return fmt.Errorf("decodeJSON: Content-Type must be application/json, got %q", ct)
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
