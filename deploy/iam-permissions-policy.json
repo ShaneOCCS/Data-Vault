@@ -1,0 +1,20 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DecryptAndGenerateDataKeyOnOneCMK",
+      "Effect": "Allow",
+      "Action": ["kms:GenerateDataKey", "kms:Decrypt"],
+      "Resource": "arn:aws:kms:us-east-1:515879577911:key/ce244c78-b3b4-4148-acaa-e8428400adb6"
+    },
+    {
+      "Sid": "ReadOnlyTheTwoAppSecrets",
+      "Effect": "Allow",
+      "Action": ["ssm:GetParameter"],
+      "Resource": [
+        "arn:aws:ssm:us-east-1:515879577911:parameter/vaultfinal/DATABASE_URL",
+        "arn:aws:ssm:us-east-1:515879577911:parameter/vaultfinal/SESSION_KEY"
+      ]
+    }
+  ]
+}
