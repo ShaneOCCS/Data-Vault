@@ -4,7 +4,6 @@ import { RegistrationFlow } from '@/components/auth/RegistrationFlow';
 import { Shield } from 'lucide-react';
 import Link from 'next/link';
 import { Suspense } from 'react';
-import { Button } from '@/components/ui/button';
 
 export default function RegisterPage() {
   return (

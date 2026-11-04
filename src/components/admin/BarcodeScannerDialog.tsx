@@ -20,7 +20,8 @@ interface BarcodeScannerDialogProps {
 
 // Turns a raw getUserMedia/decode error into an accurate, specific message
 // instead of always blaming "permissions" regardless of the real cause.
-function describeCameraError(e: any): string {
+function describeCameraError(error: unknown): string {
+  const e = error as { name?: string; message?: string } | null | undefined;
   const name = e?.name ?? '';
   switch (name) {
     case 'NotAllowedError':
@@ -92,7 +93,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onScan }: BarcodeScan
         // Loaded on demand — keeps ZXing (a fairly large decoder) out of the
         // main dashboard bundle, only fetching it when someone actually
         // opens the scanner.
-        const [{ BrowserMultiFormatReader }, { NotFoundException, DecodeHintType, BarcodeFormat }] = await Promise.all([
+        const [{ BrowserMultiFormatReader }, { DecodeHintType, BarcodeFormat }] = await Promise.all([
           import('@zxing/browser'),
           import('@zxing/library'),
         ]);
@@ -124,20 +125,15 @@ export function BarcodeScannerDialog({ open, onOpenChange, onScan }: BarcodeScan
         });
         readerRef.current = reader;
 
-        const onDecode = (result: any, err: any) => {
-          if (cancelled) return;
-          if (result) {
-            const value = result.getText()?.trim();
-            if (value) {
-              onScan(value);
-              onOpenChange(false);
-            }
-            return;
-          }
-          // NotFoundException fires continuously while no barcode is in
-          // frame yet — that's expected, not a real error.
-          if (err && !(err instanceof NotFoundException)) {
-            // Ignore transient decode errors and keep scanning.
+        // The second callback argument is ignored on purpose: NotFoundException
+        // fires continuously while no barcode is in frame, and other decode
+        // errors are transient, so scanning just continues.
+        const onDecode = (result: import('@zxing/library').Result | undefined) => {
+          if (cancelled || !result) return;
+          const value = result.getText()?.trim();
+          if (value) {
+            onScan(value);
+            onOpenChange(false);
           }
         };
 
@@ -158,7 +154,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onScan }: BarcodeScan
             videoRef.current!,
             onDecode
           );
-        } catch (constraintErr: any) {
+        } catch (constraintErr) {
           // Laptops/desktops often only have a front camera, and some
           // browsers throw OverconstrainedError when 'environment' isn't
           // available rather than silently falling back. Retry with no
@@ -178,7 +174,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onScan }: BarcodeScan
         controlsRef.current = controls;
         setTorchSupported(typeof controls.switchTorch === 'function');
         setStarting(false);
-      } catch (e: any) {
+      } catch (e) {
         if (!cancelled) {
           setError(describeCameraError(e));
           setStarting(false);

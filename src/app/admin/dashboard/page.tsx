@@ -1,495 +1,283 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Shield, LogOut, Users, Trash2, UserPlus, Loader2, AlertCircle, Upload, FileText, IdCard, Search, ScanLine, X } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+import { Shield, LogOut, Users, Loader2, AlertCircle, FileText, IdCard, Pencil, LayoutGrid } from 'lucide-react';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Switch } from '@/components/ui/switch';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-  getAdminSession,
-  clearAdminSession,
-  getAllAdmins,
-  addAdmin,
-  removeAdmin,
-  type Admin,
-} from '@/app/lib/admin-store';
-import { getAllAccounts, setAccountActive, isAccountActive, type Account } from '@/app/lib/local-db';
-import {
-  uploadDocument,
-  getAllDocuments,
-  deleteDocument,
-  type VaultDocument,
-} from '@/app/lib/document-store';
-import { BarcodeScannerDialog } from '@/components/admin/BarcodeScannerDialog';
+  adminLogout,
+  listAdmins,
+  listMembers,
+  updateAdminProfile,
+  type AdminSummary,
+  type MemberSummary,
+  type ProvisionedMember,
+} from '@/lib/admin-api';
+import { ApiError } from '@/lib/api';
+import { getAdminDisplayCache, setAdminDisplayCache, clearAdminDisplayCache } from '@/lib/admin-session-cache';
+import { AdminsSection, type CreatedInvite } from '@/components/admin/AdminsSection';
 import { BarcodeGenerator } from '@/components/admin/BarcodeGenerator';
+import { KitIdListTab } from '@/components/admin/KitIdListTab';
+import { ProvisionTab } from '@/components/admin/ProvisionTab';
+import { UploadDocumentsTab, type LastIngest } from '@/components/admin/UploadDocumentsTab';
 
 export default function AdminDashboardPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [admin, setAdmin] = useState<{ email: string; name: string } | null>(null);
   const [checked, setChecked] = useState(false);
-  const [admins, setAdmins] = useState<Admin[]>([]);
-  const [newName, setNewName] = useState('');
-  const [newEmail, setNewEmail] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [addError, setAddError] = useState('');
-  const [adding, setAdding] = useState(false);
+  const [admins, setAdmins] = useState<AdminSummary[]>([]);
+  const [members, setMembers] = useState<MemberSummary[]>([]);
+  const [adminsFailed, setAdminsFailed] = useState(false);
+  const [membersFailed, setMembersFailed] = useState(false);
 
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [documents, setDocuments] = useState<VaultDocument[]>([]);
-  const [selectedKitId, setSelectedKitId] = useState('');
-  const [uploadError, setUploadError] = useState('');
-  const [uploading, setUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [section, setSection] = useState<'overview' | 'admins' | 'kit'>('overview');
+  const [kitTab, setKitTab] = useState<'list' | 'provision' | 'barcodes' | 'upload'>('list');
 
-  const [kitSearch, setKitSearch] = useState('');
-  const [uploadKitSearch, setUploadKitSearch] = useState('');
-  const [scannerOpen, setScannerOpen] = useState(false);
-  const [togglingKitId, setTogglingKitId] = useState<string | null>(null);
+  // Results the backend can only ever give us once. They live here because the
+  // sections below unmount when you switch away, and these must not disappear.
+  const [provisioned, setProvisioned] = useState<ProvisionedMember[]>([]);
+  const [lastInvite, setLastInvite] = useState<CreatedInvite | null>(null);
+  // The backend has no "list past uploads" endpoint, so this only covers this session.
+  const [lastIngest, setLastIngest] = useState<LastIngest | null>(null);
+
+  // --- Self-service name update (POST /api/admin/profile, any role) ---
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+  const [savingName, setSavingName] = useState(false);
 
   const loadAdmins = async () => {
-    const list = await getAllAdmins();
-    setAdmins(list);
+    try {
+      setAdmins(await listAdmins());
+      setAdminsFailed(false);
+    } catch {
+      setAdminsFailed(true);
+    }
   };
 
-  const loadAccounts = async () => {
-    const list = await getAllAccounts();
-    setAccounts(list);
-  };
-
-  const loadDocuments = async () => {
-    const list = await getAllDocuments();
-    setDocuments(list);
+  const loadMembers = async () => {
+    try {
+      setMembers(await listMembers());
+      setMembersFailed(false);
+    } catch {
+      setMembersFailed(true);
+    }
   };
 
   useEffect(() => {
-    const session = getAdminSession();
+    // The display cache only says who to show. The first API calls below are
+    // what check the real session: a 401 redirects to login (see adminFetch).
+    const session = getAdminDisplayCache();
     if (!session) {
       router.push('/admin/login');
       return;
     }
     setAdmin(session);
-    setChecked(true);
-    loadAdmins();
-    loadAccounts();
-    loadDocuments();
+    Promise.all([loadAdmins(), loadMembers()]).then(() => setChecked(true));
   }, [router]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     toast({ variant: 'success', title: 'Signed Out', description: 'Please log back in whenever you need admin access.' });
-    clearAdminSession();
+    try {
+      await adminLogout(); // clears the real session cookie server-side
+    } catch {
+      // even if this network call fails, still clear local state and send them to login
+    }
+    clearAdminDisplayCache();
     setTimeout(() => router.push('/admin/login'), 500);
   };
 
-  const handleAddAdmin = async () => {
-    if (!newName || !newEmail || !newPassword) {
-      setAddError('Please fill in the name, email, and password to continue.');
-      return;
-    }
-    setAdding(true);
-    setAddError('');
-    const result = await addAdmin({ name: newName, email: newEmail, password: newPassword });
-    setAdding(false);
-    if (!result.ok) {
-      setAddError(result.error || "Please try again — we couldn't add this admin.");
-      return;
-    }
-    toast({ variant: 'success', title: 'Admin Added', description: `Please share the new login with ${newEmail} — they can sign in now.` });
-    setNewName('');
-    setNewEmail('');
-    setNewPassword('');
-    loadAdmins();
-  };
-
-  const handleRemoveAdmin = async (email: string) => {
-    await removeAdmin(email);
-    toast({ variant: 'success', title: 'Admin Removed', description: `Please note — ${email} no longer has access.` });
-    loadAdmins();
-  };
-
-  const handleUploadClick = () => {
-    if (!selectedKitId) {
-      setUploadError('Please select a KIT ID before uploading a file.');
-      return;
-    }
-    setUploadError('');
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !selectedKitId) return;
-    setUploading(true);
-    setUploadError('');
-    const result = await uploadDocument(selectedKitId, file);
-    setUploading(false);
-    if (!result.ok) {
-      setUploadError(result.error || "Please try again — we couldn't upload that file.");
-      return;
-    }
-    toast({ variant: 'success', title: 'Document Uploaded', description: `Please note — ${selectedKitId} can now access "${file.name}".` });
-    loadDocuments();
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
-  const handleDeleteDocument = async (id: string, fileName: string) => {
-    await deleteDocument(id);
-    toast({ variant: 'success', title: 'Document Removed', description: `Please note — "${fileName}" is no longer available for download.` });
-    loadDocuments();
-  };
-
-  const handleToggleActive = async (acc: Account) => {
-    const nextActive = !isAccountActive(acc);
-    setTogglingKitId(acc.kitId);
+  const handleSaveName = async () => {
+    if (!nameInput.trim()) return;
+    setSavingName(true);
     try {
-      await setAccountActive(acc.kitId, nextActive);
-      toast({
-        variant: 'success',
-        title: nextActive ? 'KIT ID Activated' : 'KIT ID Deactivated',
-        description: nextActive
-          ? `Please note — ${acc.kitId} can log in again.`
-          : `Please note — ${acc.kitId} can no longer log in. Admins can still upload files for it.`,
-      });
-      loadAccounts();
+      const session = await updateAdminProfile(nameInput.trim());
+      setAdmin(session);
+      setAdminDisplayCache(session);
+      setEditingName(false);
+      toast({ variant: 'success', title: 'Name Updated', description: 'Please note — your display name has been updated.' });
+      loadAdmins(); // refresh so the admin list reflects the new name too
+    } catch (e) {
+      const message = e instanceof ApiError ? e.message : "Please try again — we couldn't update your name.";
+      toast({ variant: 'destructive', title: 'Could Not Update Name', description: message });
     } finally {
-      setTogglingKitId(null);
+      setSavingName(false);
     }
   };
 
-  const handleBarcodeScan = (value: string) => {
-    const normalized = value.trim().toUpperCase();
-    const match = accounts.find((a) => a.kitId.toUpperCase() === normalized);
-    if (match) {
-      setSelectedKitId(match.kitId);
-      setUploadKitSearch('');
-      toast({ variant: 'success', title: 'KIT ID Scanned', description: `Selected ${match.kitId} — ${match.name}.` });
-    } else {
-      setUploadKitSearch(normalized);
-      toast({ variant: 'destructive', title: 'No Match Found', description: `"${normalized}" doesn't match any known KIT ID. Please check and try again.` });
-    }
+  const handleProvisioned = (created: ProvisionedMember[]) => {
+    // Added to, not replaced: generating another batch must not wipe keys from
+    // the previous one that haven't been copied yet.
+    setProvisioned((prev) => [...created, ...prev]);
+    loadMembers(); // refresh so the new ones show up everywhere else on this page
   };
 
-  const filteredAccounts = accounts.filter((acc) => {
-    const q = kitSearch.trim().toLowerCase();
-    if (!q) return true;
-    return acc.kitId.toLowerCase().includes(q);
-  });
-
-  const uploadFilteredAccounts = accounts.filter((acc) => {
-    const q = uploadKitSearch.trim().toLowerCase();
-    if (!q) return true;
-    return acc.kitId.toLowerCase().includes(q);
-  });
-
-  const formatSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
+  // Derived from our own entry in the admins list (backend now only sends
+  // us everyone's data if we ARE a superadmin — this just mirrors that for the UI).
+  const isSuperadmin = admins.find((a) => a.email === admin?.email)?.role === 'superadmin';
 
   if (!checked) {
     return <div className="flex items-center justify-center h-screen text-muted-foreground">Checking access...</div>;
   }
 
+  const navItemClass = (active: boolean) =>
+    `flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+      active ? 'bg-white/15 text-white' : 'text-white/70 hover:text-white hover:bg-white/10'
+    }`;
+
+  const sectionTitle = section === 'overview' ? 'Overview' : section === 'admins' ? 'Manage Admins' : 'KIT IDs';
+
   return (
-    <div className="min-h-screen bg-[#F4F6F9]">
-      <header className="bg-white border-b px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="bg-primary p-1.5 rounded-lg"><Shield className="h-5 w-5 text-white" /></div>
-          <span className="font-bold text-lg text-primary tracking-tighter uppercase">Data Vault Admin</span>
+    <div className="min-h-screen flex bg-[#F4F6F9]">
+      <aside className="w-60 shrink-0 bg-primary flex flex-col p-4">
+        <div className="flex items-center gap-2 mb-8 px-1">
+          <div className="bg-white/15 p-1.5 rounded-lg"><Shield className="h-5 w-5 text-white" /></div>
+          <span className="font-bold text-sm text-white tracking-tighter uppercase">Data Vault Admin</span>
         </div>
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-muted-foreground">{admin?.email}</span>
-          <Button variant="outline" size="sm" onClick={handleLogout}>
+        <nav className="flex flex-col gap-1">
+          <button type="button" className={navItemClass(section === 'overview')} onClick={() => setSection('overview')}>
+            <LayoutGrid className="h-4 w-4" /> Overview
+          </button>
+          <button type="button" className={navItemClass(section === 'admins')} onClick={() => setSection('admins')}>
+            <Users className="h-4 w-4" /> Admins
+          </button>
+          <button type="button" className={navItemClass(section === 'kit')} onClick={() => setSection('kit')}>
+            <IdCard className="h-4 w-4" /> KIT IDs
+          </button>
+        </nav>
+        <div className="mt-auto pt-4 border-t border-white/10">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start text-white/80 hover:text-white hover:bg-white/10"
+            onClick={handleLogout}
+          >
             <LogOut className="h-4 w-4 mr-2" /> Sign Out
           </Button>
         </div>
-      </header>
+      </aside>
 
-      <main className="p-6 max-w-6xl mx-auto space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold">Welcome, {admin?.name}</h1>
-          <p className="text-muted-foreground">Manage admin access, KIT IDs, and shared documents below.</p>
-        </div>
+      <div className="flex-1 min-w-0 flex flex-col">
+        <header className="bg-white border-b px-6 py-4 flex items-center justify-between">
+          <h2 className="font-semibold text-foreground">{sectionTitle}</h2>
+          <span className="text-sm text-muted-foreground">{admin?.email}</span>
+        </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Admins</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{admins.length}</div>
-              <CardDescription>With portal access</CardDescription>
-            </CardContent>
-          </Card>
+        <main className="p-6 max-w-6xl w-full mx-auto space-y-6">
+          {(adminsFailed || membersFailed) && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                We couldn&apos;t load all the data on this page, so what&apos;s shown may be incomplete. Please refresh to try again.
+              </AlertDescription>
+            </Alert>
+          )}
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">KIT IDs</CardTitle>
-              <IdCard className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{accounts.length}</div>
-              <CardDescription>{accounts.filter((a) => a.registered).length} registered</CardDescription>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Documents</CardTitle>
-              <FileText className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{documents.length}</div>
-              <CardDescription>Shared with KIT IDs</CardDescription>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Manage Admins</CardTitle>
-            <CardDescription>Add or remove admin logins.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {addError && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{addError}</AlertDescription>
-              </Alert>
-            )}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-              <div className="space-y-1.5">
-                <Label htmlFor="new-name">Name</Label>
-                <Input id="new-name" placeholder="Jane Doe" value={newName} onChange={(e) => setNewName(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="new-email">Email</Label>
-                <Input id="new-email" type="email" placeholder="jane@gmail.com" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="new-password">Password</Label>
-                <Input id="new-password" type="password" placeholder="••••••••" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
-              </div>
-              <Button onClick={handleAddAdmin} disabled={adding} className="h-10">
-                {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <><UserPlus className="h-4 w-4 mr-2" /> Add Admin</>}
-              </Button>
-            </div>
-
-            <div className="border rounded-lg divide-y">
-              {admins.length === 0 && (
-                <div className="p-6 text-center text-sm text-muted-foreground">No admins yet.</div>
-              )}
-              {admins.map((a) => (
-                <div key={a.email} className="flex items-center justify-between px-4 py-3">
-                  <div>
-                    <p className="font-medium text-sm">{a.name}</p>
-                    <p className="text-xs text-muted-foreground">{a.email}</p>
-                  </div>
+          {section === 'overview' && (
+            <>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-2xl font-bold">Welcome, {admin?.name}</h1>
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="text-destructive hover:text-destructive"
-                    onClick={() => handleRemoveAdmin(a.email)}
-                    disabled={admins.length === 1}
+                    aria-label="Edit your name"
+                    onClick={() => { setEditingName(true); setNameInput(admin?.name || ''); }}
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Pencil className="h-4 w-4" />
                   </Button>
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Registered KIT IDs</CardTitle>
-            <CardDescription>Please review everyone who has a vault account, and activate or deactivate their login access.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by KIT ID..."
-                value={kitSearch}
-                onChange={(e) => setKitSearch(e.target.value)}
-                className="pl-9 pr-9"
-              />
-              {kitSearch && (
-                <button
-                  type="button"
-                  onClick={() => setKitSearch('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  aria-label="Clear search"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-
-            <div className="border rounded-lg divide-y">
-              {accounts.length === 0 && (
-                <div className="p-6 text-center text-sm text-muted-foreground">No KIT IDs yet. Please seed or register one first.</div>
-              )}
-              {accounts.length > 0 && filteredAccounts.length === 0 && (
-                <div className="p-6 text-center text-sm text-muted-foreground">No KIT IDs match "{kitSearch}".</div>
-              )}
-              {filteredAccounts.map((acc) => {
-                const active = isAccountActive(acc);
-                return (
-                  <div key={acc.kitId} className="flex items-center justify-between px-4 py-3 gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="bg-primary/10 p-2 rounded-lg shrink-0"><IdCard className="h-4 w-4 text-primary" /></div>
-                      <div className="min-w-0">
-                        <p className="font-medium text-sm truncate">{acc.name}</p>
-                        <p className="text-xs text-muted-foreground">{acc.kitId}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className={`text-xs px-2 py-1 rounded-full font-medium ${acc.registered ? 'bg-accent/10 text-accent' : 'bg-muted text-muted-foreground'}`}>
-                        {acc.registered ? 'Registered' : 'Pending Setup'}
-                      </span>
-                      <span className={`text-xs px-2 py-1 rounded-full font-medium ${active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                        {active ? 'Active' : 'Inactive'}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        {togglingKitId === acc.kitId ? (
-                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                        ) : (
-                          <Switch
-                            checked={active}
-                            onCheckedChange={() => handleToggleActive(acc)}
-                            aria-label={active ? `Deactivate ${acc.kitId}` : `Activate ${acc.kitId}`}
-                          />
-                        )}
-                      </div>
-                    </div>
+                <p className="text-muted-foreground">Manage admin access, KIT IDs, and shared documents below.</p>
+                {editingName && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <Input className="w-56 h-9" value={nameInput} onChange={(e) => setNameInput(e.target.value)} />
+                    <Button size="sm" onClick={handleSaveName} disabled={savingName}>
+                      {savingName ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setEditingName(false)}>Cancel</Button>
                   </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-
-        <BarcodeGenerator accounts={accounts} />
-
-        <Card>
-          <CardHeader>
-            <CardTitle>KIT ID Documents</CardTitle>
-            <CardDescription>
-              Please upload a PDF or file to a KIT ID — its owner will see it as a download on their personal dashboard.
-              Deactivated KIT IDs can still receive uploads; they just can't log in to view them until reactivated.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {uploadError && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{uploadError}</AlertDescription>
-              </Alert>
-            )}
-            <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
-              <div className="space-y-1.5 flex-1">
-                <Label>KIT ID</Label>
-                <div className="relative mb-2">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search by KIT ID..."
-                    value={uploadKitSearch}
-                    onChange={(e) => setUploadKitSearch(e.target.value)}
-                    className="pl-9"
-                  />
-                </div>
-                <Select value={selectedKitId} onValueChange={setSelectedKitId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a KIT ID" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {uploadFilteredAccounts.length === 0 && (
-                      <div className="px-3 py-2 text-sm text-muted-foreground">No KIT IDs match "{uploadKitSearch}".</div>
-                    )}
-                    {uploadFilteredAccounts.map((acc) => (
-                      <SelectItem key={acc.kitId} value={acc.kitId}>
-                        {acc.kitId} — {acc.name}
-                        {!isAccountActive(acc) ? ' (Inactive)' : ''}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                )}
               </div>
-              <Button variant="outline" onClick={() => setScannerOpen(true)} className="h-10">
-                <ScanLine className="h-4 w-4 mr-2" /> Scan Barcode
-              </Button>
-              <Button onClick={handleUploadClick} disabled={uploading} className="h-10">
-                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Upload className="h-4 w-4 mr-2" /> Upload File</>}
-              </Button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
-                className="hidden"
-                onChange={handleFileChange}
-              />
-            </div>
-            {(() => {
-              const selectedAccount = accounts.find((a) => a.kitId === selectedKitId);
-              if (!selectedAccount || isAccountActive(selectedAccount)) return null;
-              return (
-                <Alert>
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>
-                    {selectedKitId} is currently deactivated. You can still upload files — the owner will see them once reactivated.
-                  </AlertDescription>
-                </Alert>
-              );
-            })()}
 
-            <div className="border rounded-lg divide-y">
-              {documents.length === 0 && (
-                <div className="p-6 text-center text-sm text-muted-foreground">No documents uploaded yet.</div>
-              )}
-              {documents.map((doc) => (
-                <div key={doc.id} className="flex items-center justify-between px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-muted p-2 rounded-lg"><FileText className="h-4 w-4 text-muted-foreground" /></div>
-                    <div>
-                      <p className="font-medium text-sm">{doc.fileName}</p>
-                      <p className="text-xs text-muted-foreground">{doc.kitId} · {formatSize(doc.size)}</p>
-                    </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-destructive hover:text-destructive"
-                    onClick={() => handleDeleteDocument(doc.id, doc.fileName)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </main>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Admins</CardTitle>
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{adminsFailed ? '—' : admins.length}</div>
+                    <CardDescription>With portal access</CardDescription>
+                  </CardContent>
+                </Card>
 
-      <BarcodeScannerDialog
-        open={scannerOpen}
-        onOpenChange={setScannerOpen}
-        onScan={handleBarcodeScan}
-      />
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">KIT IDs</CardTitle>
+                    <IdCard className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{membersFailed ? '—' : members.length}</div>
+                    <CardDescription>{membersFailed ? 'Not available' : `${members.filter((m) => m.registered).length} registered`}</CardDescription>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Last Upload</CardTitle>
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{lastIngest ? lastIngest.rowCount : '—'}</div>
+                    <CardDescription>{lastIngest ? `row(s) for ${lastIngest.kitId}` : 'No uploads yet this session'}</CardDescription>
+                  </CardContent>
+                </Card>
+              </div>
+            </>
+          )}
+
+          {section === 'admins' && (
+            <AdminsSection
+              admins={admins}
+              isSuperadmin={isSuperadmin}
+              lastInvite={lastInvite}
+              onInviteCreated={setLastInvite}
+            />
+          )}
+
+          {section === 'kit' && (
+            <Tabs value={kitTab} onValueChange={(v) => setKitTab(v as typeof kitTab)}>
+              <TabsList>
+                <TabsTrigger value="list">List</TabsTrigger>
+                <TabsTrigger value="provision">Provision</TabsTrigger>
+                <TabsTrigger value="barcodes">Barcodes</TabsTrigger>
+                <TabsTrigger value="upload">Upload Documents</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="list" className="space-y-4">
+                <KitIdListTab members={members} loadFailed={membersFailed} isSuperadmin={isSuperadmin} />
+              </TabsContent>
+
+              <TabsContent value="provision" className="space-y-4">
+                <ProvisionTab provisioned={provisioned} onProvisioned={handleProvisioned} />
+              </TabsContent>
+
+              <TabsContent value="barcodes" className="space-y-4">
+                <BarcodeGenerator members={members.filter((m) => !m.registered)} />
+              </TabsContent>
+
+              <TabsContent value="upload" className="space-y-4">
+                <UploadDocumentsTab members={members} lastIngest={lastIngest} onIngested={setLastIngest} />
+              </TabsContent>
+            </Tabs>
+          )}
+        </main>
+      </div>
     </div>
   );
 }

@@ -14,10 +14,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { Account } from '@/app/lib/local-db';
+import type { MemberSummary } from '@/lib/admin-api';
+import { ListPager, usePagedList } from '@/components/admin/ListPager';
 
 interface BarcodeGeneratorProps {
-  accounts: Account[];
+  members: MemberSummary[]; // CHANGED: was `accounts: Account[]`
 }
 
 // Renders a single KIT ID as a barcode onto an <svg>. jsbarcode draws
@@ -46,7 +47,7 @@ function BarcodeSvg({ value, forwardedRef }: { value: string; forwardedRef?: Rea
   return <svg ref={forwardedRef ?? localRef} />;
 }
 
-export function BarcodeGenerator({ accounts }: BarcodeGeneratorProps) {
+export function BarcodeGenerator({ members }: BarcodeGeneratorProps) {
   // --- Single barcode ---
   const [singleKitId, setSingleKitId] = useState('');
   const singleSvgRef = useRef<SVGSVGElement>(null);
@@ -72,11 +73,12 @@ export function BarcodeGenerator({ accounts }: BarcodeGeneratorProps) {
   const [batchSearch, setBatchSearch] = useState('');
   const [selectedKitIds, setSelectedKitIds] = useState<Set<string>>(new Set());
 
-  const batchFilteredAccounts = accounts.filter((acc) => {
+  const batchFilteredMembers = members.filter((m) => {
     const q = batchSearch.trim().toLowerCase();
     if (!q) return true;
-    return acc.kitId.toLowerCase().includes(q);
+    return m.kitId.toLowerCase().includes(q);
   });
+  const pagedBatch = usePagedList(batchFilteredMembers, batchSearch);
 
   const toggleKitId = (kitId: string) => {
     setSelectedKitIds((prev) => {
@@ -88,15 +90,15 @@ export function BarcodeGenerator({ accounts }: BarcodeGeneratorProps) {
   };
 
   const allFilteredSelected =
-    batchFilteredAccounts.length > 0 && batchFilteredAccounts.every((a) => selectedKitIds.has(a.kitId));
+    batchFilteredMembers.length > 0 && batchFilteredMembers.every((m) => selectedKitIds.has(m.kitId));
 
   const toggleSelectAllFiltered = () => {
     setSelectedKitIds((prev) => {
       const next = new Set(prev);
       if (allFilteredSelected) {
-        batchFilteredAccounts.forEach((a) => next.delete(a.kitId));
+        batchFilteredMembers.forEach((m) => next.delete(m.kitId));
       } else {
-        batchFilteredAccounts.forEach((a) => next.add(a.kitId));
+        batchFilteredMembers.forEach((m) => next.add(m.kitId));
       }
       return next;
     });
@@ -130,9 +132,9 @@ export function BarcodeGenerator({ accounts }: BarcodeGeneratorProps) {
                   <SelectValue placeholder="Select a KIT ID" />
                 </SelectTrigger>
                 <SelectContent>
-                  {accounts.map((acc) => (
-                    <SelectItem key={acc.kitId} value={acc.kitId}>
-                      {acc.kitId} — {acc.name}
+                  {members.map((m) => (
+                    <SelectItem key={m.kitId} value={m.kitId}>
+                      {m.kitId}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -175,14 +177,14 @@ export function BarcodeGenerator({ accounts }: BarcodeGeneratorProps) {
             )}
           </div>
 
-          <div className="border rounded-lg divide-y max-h-72 overflow-y-auto">
-            {accounts.length === 0 && (
-              <div className="p-6 text-center text-sm text-muted-foreground">No KIT IDs yet.</div>
+          <div className="border rounded-lg divide-y">
+            {members.length === 0 && (
+              <div className="p-6 text-center text-sm text-muted-foreground">No pending KIT IDs.</div>
             )}
-            {accounts.length > 0 && batchFilteredAccounts.length === 0 && (
-              <div className="p-6 text-center text-sm text-muted-foreground">No KIT IDs match "{batchSearch}".</div>
+            {members.length > 0 && batchFilteredMembers.length === 0 && (
+              <div className="p-6 text-center text-sm text-muted-foreground">No KIT IDs match &quot;{batchSearch}&quot;.</div>
             )}
-            {batchFilteredAccounts.length > 0 && (
+            {batchFilteredMembers.length > 0 && (
               <button
                 type="button"
                 onClick={toggleSelectAllFiltered}
@@ -197,13 +199,13 @@ export function BarcodeGenerator({ accounts }: BarcodeGeneratorProps) {
                 {batchSearch && ' (filtered)'}
               </button>
             )}
-            {batchFilteredAccounts.map((acc) => {
-              const checked = selectedKitIds.has(acc.kitId);
+            {pagedBatch.visible.map((m) => {
+              const checked = selectedKitIds.has(m.kitId);
               return (
                 <button
                   type="button"
-                  key={acc.kitId}
-                  onClick={() => toggleKitId(acc.kitId)}
+                  key={m.kitId}
+                  onClick={() => toggleKitId(m.kitId)}
                   className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-muted/50"
                 >
                   <div className="flex items-center gap-3">
@@ -213,14 +215,16 @@ export function BarcodeGenerator({ accounts }: BarcodeGeneratorProps) {
                       <Square className="h-4 w-4 text-muted-foreground shrink-0" />
                     )}
                     <div>
-                      <p className="font-medium text-sm">{acc.name}</p>
-                      <p className="text-xs text-muted-foreground">{acc.kitId}</p>
+                      {/* CHANGED: real members have no name — show kitId + registered status instead */}
+                      <p className="font-medium text-sm">{m.kitId}</p>
+                      <p className="text-xs text-muted-foreground">{m.registered ? 'Registered' : 'Pending Setup'}</p>
                     </div>
                   </div>
                 </button>
               );
             })}
           </div>
+          <ListPager {...pagedBatch.pager} />
 
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground">
@@ -240,7 +244,7 @@ export function BarcodeGenerator({ accounts }: BarcodeGeneratorProps) {
 
 // Renders a KIT ID barcode straight onto an offscreen canvas and returns a
 // PNG data URL. Kept fully self-contained (no external scripts or CDN calls)
-// since the rest of this app runs entirely offline.
+// so KIT IDs are never sent to a third party.
 function generateBarcodeDataUrl(value: string): string {
   const canvas = document.createElement('canvas');
   try {

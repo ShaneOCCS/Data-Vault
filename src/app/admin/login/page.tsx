@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Shield, Mail, KeyRound, Loader2, AlertCircle } from 'lucide-react';
@@ -9,26 +9,21 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { useToast } from '@/hooks/use-toast';
-import { verifyAdminLogin, setAdminSession, seedDemoAdmins } from '@/app/lib/admin-store';
+import { adminLogin } from '@/lib/admin-api';
+import { isRateLimited, RATE_LIMIT_MESSAGE } from '@/lib/api';
+import { setAdminDisplayCache } from '@/lib/admin-session-cache';
 
 export default function AdminLoginPage() {
   const router = useRouter();
-  const { toast } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
 
-  const handleReset = async () => {
-    try {
-      await seedDemoAdmins();
-      toast({ variant: 'success', title: "You're All Set", description: 'Please go ahead — the demo admin account is ready to use.' });
-    } catch {
-      toast({ variant: 'destructive', title: 'Please Try Again', description: "We couldn't write to local storage." });
-    }
-  };
+  useEffect(() => {
+    setSessionExpired(new URLSearchParams(window.location.search).get('expired') === '1');
+  }, []);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -38,44 +33,26 @@ export default function AdminLoginPage() {
     setLoading(true);
     setError('');
     try {
-      const admin = await verifyAdminLogin(email, password);
-      if (!admin) {
-        setError('Please double-check your email and password and try again.');
-        setLoading(false);
-        return;
-      }
-      setAdminSession(admin);
+      // Real backend call — sets the httpOnly session cookie on success
+      // Emails aren't lowercased here: accounts created before invites were
+      // normalized may have capitals, and the backend matches them exactly.
+      const session = await adminLogin(email.trim(), password);
+      setAdminDisplayCache(session); // cache {email, name} for display only
       router.push('/admin/dashboard');
-    } catch {
-      setError("Please try again — we couldn't log you in.");
+    } catch (e) {
+      // Generic message on purpose: don't tell an attacker whether the email exists
+      setError(isRateLimited(e) ? RATE_LIMIT_MESSAGE : 'Please double-check your email and password and try again.');
       setLoading(false);
     }
   };
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <header className="p-6 flex justify-between items-center">
+      <header className="p-6">
         <Link href="/" className="flex items-center gap-2">
           <div className="bg-primary p-1.5 rounded-lg"><Shield className="h-6 w-6 text-white" /></div>
           <span className="font-bold text-xl text-primary tracking-tighter uppercase">Data Vault</span>
         </Link>
-        <Popover>
-          <PopoverTrigger asChild><Button variant="outline" size="sm">Demo Credentials</Button></PopoverTrigger>
-          <PopoverContent className="w-80">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="font-bold text-sm">Demo Admin Login</h4>
-                <Button variant="ghost" size="sm" onClick={handleReset} className="text-xs text-primary">INITIALIZE DB</Button>
-              </div>
-              <div className="space-y-2 text-xs">
-                <div className="p-2 bg-muted rounded">
-                  <p>Email: <code>admin@gmail.com</code></p>
-                  <p>Password: <code>Admin123!</code></p>
-                </div>
-              </div>
-            </div>
-          </PopoverContent>
-        </Popover>
       </header>
 
       <main className="flex-1 flex items-center justify-center px-6 py-12">
@@ -88,6 +65,12 @@ export default function AdminLoginPage() {
             <CardDescription>Sign in with your admin email and password.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {sessionExpired && !error && (
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>Your session has ended. Please sign in again.</AlertDescription>
+              </Alert>
+            )}
             {error && (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
@@ -101,7 +84,7 @@ export default function AdminLoginPage() {
                 <Input
                   id="email"
                   type="email"
-                  placeholder="admin@gmail.com"
+                  placeholder="admin@example.com"
                   className="pl-9"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
