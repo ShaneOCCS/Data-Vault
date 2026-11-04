@@ -26,3 +26,7 @@ CLAUDE.local.md
 *.log
 .DS_Store
 Thumbs.db
+*.pem
+*.key
+vaultfinal/bin/
+vaultfinal/obj/

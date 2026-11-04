@@ -1,0 +1,28 @@
+[Unit]
+Description=Medical Vault backend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vaultapp
+Group=vaultapp
+# "+" forces this one command to run as root regardless of the User= above
+# — it needs root to read/write /etc/vaultfinal and chown the result to
+# vaultapp. Everything else in this unit, including the app itself, runs
+# unprivileged.
+ExecStartPre=+/opt/vaultfinal/fetch-secrets.sh
+EnvironmentFile=/etc/vaultfinal/vaultfinal.env
+ExecStart=/opt/vaultfinal/server
+Restart=on-failure
+RestartSec=5
+
+# Defense in depth: even though this process only ever binds 127.0.0.1:8080
+# and never touches secrets outside its one env file, these cost nothing.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/etc/vaultfinal
+
+[Install]
+WantedBy=multi-user.target
