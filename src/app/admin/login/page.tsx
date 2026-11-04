@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Shield, Mail, KeyRound, Loader2, AlertCircle } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+import { Loader2, AlertCircle } from 'lucide-react';
+import { AuthShell, AuthCard, AuthNote, type AuthPanel } from '@/components/site/SiteShell';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,17 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { adminLogin } from '@/lib/admin-api';
 import { isRateLimited, RATE_LIMIT_MESSAGE } from '@/lib/api';
 import { setAdminDisplayCache } from '@/lib/admin-session-cache';
+
+const panel: AuthPanel = {
+  title: 'Staff access',
+  intro: 'For clinic and admin staff only.',
+  points: [
+    { title: 'Create KIT IDs', body: 'Generate KIT IDs with setup codes and recovery keys for new kits.' },
+    { title: 'Upload results', body: 'Upload a CSV to a KIT ID so its owner can see it on their dashboard.' },
+    { title: 'Manage access', body: 'See every KIT ID, top up recovery keys and manage other admins.' },
+  ],
+  help: <>Need an account? Ask a super admin to send you an invite.</>,
+};
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -47,74 +58,59 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <header className="p-6">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="bg-primary p-1.5 rounded-lg"><Shield className="h-6 w-6 text-white" /></div>
-          <span className="font-bold text-xl text-primary tracking-tighter uppercase">Data Vault</span>
-        </Link>
-      </header>
-
-      <main className="flex-1 flex items-center justify-center px-6 py-12">
-        <Card className="w-full max-w-sm">
-          <CardHeader className="text-center">
-            <div className="mx-auto bg-primary/10 p-3 rounded-full w-fit mb-2">
-              <Shield className="h-6 w-6 text-primary" />
-            </div>
-            <CardTitle>Admin Portal</CardTitle>
-            <CardDescription>Sign in with your admin email and password.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {sessionExpired && !error && (
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>Your session has ended. Please sign in again.</AlertDescription>
-              </Alert>
-            )}
-            {error && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="admin@example.com"
-                  className="pl-9"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <div className="relative">
-                <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  className="pl-9"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-                />
-              </div>
-            </div>
-          </CardContent>
-          <CardFooter>
-            <Button className="w-full" onClick={handleLogin} disabled={loading}>
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Sign In'}
-            </Button>
-          </CardFooter>
-        </Card>
-      </main>
-    </div>
+    <AuthShell showStaffLink={false} panel={panel}>
+      <AuthCard
+        step="Staff"
+        title="Staff sign in"
+        description="Sign in with your admin email and password."
+        footer={
+          <Button className="w-full h-11 font-semibold" onClick={handleLogin} disabled={loading}>
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Sign in'}
+          </Button>
+        }
+      >
+        {sessionExpired && !error && (
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>Your session has ended. Please sign in again.</AlertDescription>
+          </Alert>
+        )}
+        <div className="space-y-2">
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            type="email"
+            autoComplete="username"
+            placeholder="name@clinic.com"
+            className="h-11"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="password">Password</Label>
+          <Input
+            id="password"
+            type="password"
+            autoComplete="current-password"
+            placeholder="••••••••"
+            className="h-11"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+          />
+        </div>
+        {error && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+      </AuthCard>
+      <AuthNote>
+        Not staff? <Link href="/login" className="font-medium text-primary hover:underline">Patient sign in</Link>
+      </AuthNote>
+    </AuthShell>
   );
 }
