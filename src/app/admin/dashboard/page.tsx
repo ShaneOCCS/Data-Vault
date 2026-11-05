@@ -20,7 +20,7 @@ import {
 } from '@/lib/admin-api';
 import { ApiError } from '@/lib/api';
 import { getAdminDisplayCache, setAdminDisplayCache, clearAdminDisplayCache } from '@/lib/admin-session-cache';
-import { SiteHeader, SiteFooter } from '@/components/site/SiteShell';
+import { SiteHeader } from '@/components/site/SiteShell';
 import { AdminsSection, type CreatedInvite } from '@/components/admin/AdminsSection';
 import { BarcodeGenerator } from '@/components/admin/BarcodeGenerator';
 import { KitIdListTab } from '@/components/admin/KitIdListTab';
@@ -133,9 +133,15 @@ export default function AdminDashboardPage() {
       active ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
     }`;
 
+  const sideItemClass = (active: boolean) =>
+    `flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+      active ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+    }`;
+
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <SiteHeader
+        fullWidth
         logoHref="/admin/dashboard"
         right={
           <>
@@ -149,8 +155,9 @@ export default function AdminDashboardPage() {
           </>
         }
       />
-      <div className="border-b bg-white">
-        <nav className="mx-auto flex w-full max-w-6xl gap-6 overflow-x-auto px-4 sm:px-6">
+      {/* Phones: sections as tabs under the header */}
+      <div className="border-b bg-white lg:hidden">
+        <nav className="flex w-full gap-6 overflow-x-auto px-4 sm:px-6">
           <button type="button" className={navItemClass(section === 'overview')} onClick={() => setSection('overview')}>
             <LayoutGrid className="h-4 w-4" /> Overview
           </button>
@@ -163,8 +170,23 @@ export default function AdminDashboardPage() {
         </nav>
       </div>
 
-      <div className="flex-1 min-w-0 flex flex-col">
-        <main className="flex-1 px-4 sm:px-6 py-8 max-w-6xl w-full mx-auto space-y-6">
+      <div className="flex-1 min-w-0 flex">
+        {/* Laptops: light sidebar, same look as the rest of the site */}
+        <aside className="hidden lg:flex w-60 shrink-0 flex-col border-r bg-white px-3 py-6">
+          <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Manage</p>
+          <nav className="flex flex-col gap-1">
+            <button type="button" className={sideItemClass(section === 'overview')} onClick={() => setSection('overview')}>
+              <LayoutGrid className="h-4 w-4" /> Overview
+            </button>
+            <button type="button" className={sideItemClass(section === 'admins')} onClick={() => setSection('admins')}>
+              <Users className="h-4 w-4" /> Admins
+            </button>
+            <button type="button" className={sideItemClass(section === 'kit')} onClick={() => setSection('kit')}>
+              <IdCard className="h-4 w-4" /> KIT IDs
+            </button>
+          </nav>
+        </aside>
+        <main className="flex-1 min-w-0 px-4 sm:px-8 py-8 max-w-5xl space-y-6">
           {(adminsFailed || membersFailed) && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
@@ -274,7 +296,7 @@ export default function AdminDashboardPage() {
           )}
         </main>
       </div>
-      <SiteFooter showStaffLink={false} />
+      
     </div>
   );
 }

@@ -28,14 +28,16 @@ export function SiteHeader({
   right,
   logoLabel,
   logoHref,
+  fullWidth = false,
 }: {
   right?: React.ReactNode;
   logoLabel?: string;
   logoHref?: string;
+  fullWidth?: boolean; // for pages with a sidebar: logo lines up with the sidebar
 }) {
   return (
     <header className="border-b bg-white">
-      <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+      <div className={cn('mx-auto w-full px-4 sm:px-6 h-16 flex items-center justify-between gap-4', !fullWidth && 'max-w-6xl')}>
         <Logo label={logoLabel} href={logoHref} />
         {right && <div className="flex items-center gap-3">{right}</div>}
       </div>
@@ -83,48 +85,77 @@ export function AuthShell({
   showStaffLink?: boolean;
   panel?: AuthPanel;
 }) {
+  if (!panel) {
+    return (
+      <div className="min-h-screen flex flex-col bg-background">
+        <SiteHeader right={headerRight} logoLabel={logoLabel} />
+        <main className="flex-1 flex items-start sm:items-center justify-center px-4 sm:px-6 py-10 sm:py-16">
+          <div className="w-full max-w-md space-y-4">{children}</div>
+        </main>
+        <SiteFooter showStaffLink={showStaffLink} />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen flex flex-col bg-background">
-      <SiteHeader right={headerRight} logoLabel={logoLabel} />
-      <main className="flex-1 flex items-start lg:items-center justify-center px-4 sm:px-6 py-10 lg:py-16">
-        <div
-          className={cn(
-            'w-full',
-            panel ? 'max-w-5xl grid gap-10 lg:grid-cols-2 lg:gap-0 lg:rounded-3xl lg:border lg:bg-white lg:shadow-sm lg:overflow-hidden' : 'max-w-md'
-          )}
-        >
-          {panel && (
-            <aside className="hidden lg:flex flex-col justify-between bg-primary text-primary-foreground p-10">
-              <div className="space-y-8">
-                <div className="space-y-3">
-                  <h2 className="text-2xl font-semibold tracking-tight">{panel.title}</h2>
-                  {panel.intro && <p className="text-sm text-primary-foreground/80">{panel.intro}</p>}
+    <div className="min-h-screen bg-background lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:bg-white">
+      {/* Laptops: full-height blue side with the logo and page-specific help */}
+      <aside className="hidden lg:flex flex-col justify-between bg-primary text-primary-foreground px-12 py-10">
+        <Link href="/" className="flex items-center gap-2">
+          <div className="rounded-lg bg-white/15 p-1.5">
+            <Shield className="h-5 w-5 text-white" />
+          </div>
+          <span className="font-headline text-lg font-bold">{logoLabel ?? 'Data Vault'}</span>
+        </Link>
+        <div className="max-w-md space-y-8">
+          <div className="space-y-3">
+            <h2 className="text-3xl font-semibold tracking-tight">{panel.title}</h2>
+            {panel.intro && <p className="text-primary-foreground/80">{panel.intro}</p>}
+          </div>
+          <ul className="space-y-5">
+            {panel.points.map((pt, i) => (
+              <li key={pt.title} className="flex gap-3">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/15 text-xs font-semibold">
+                  {i + 1}
+                </span>
+                <div>
+                  <p className="font-semibold">{pt.title}</p>
+                  <p className="text-sm text-primary-foreground/75 mt-0.5">{pt.body}</p>
                 </div>
-                <ul className="space-y-5">
-                  {panel.points.map((pt, i) => (
-                    <li key={pt.title} className="flex gap-3">
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/15 text-xs font-semibold">
-                        {i + 1}
-                      </span>
-                      <div>
-                        <p className="text-sm font-semibold">{pt.title}</p>
-                        <p className="text-sm text-primary-foreground/75 mt-0.5">{pt.body}</p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              {panel.help && (
-                <div className="mt-10 rounded-xl bg-white/10 p-4 text-sm text-primary-foreground/90">{panel.help}</div>
-              )}
-            </aside>
-          )}
-          <div className={cn('w-full space-y-4', panel && 'mx-auto max-w-md lg:max-w-none lg:p-10 lg:flex lg:flex-col lg:justify-center [&>div:first-child]:lg:border-0 [&>div:first-child]:lg:shadow-none')}>
+              </li>
+            ))}
+          </ul>
+        </div>
+        {panel.help ? (
+          <div className="max-w-md rounded-xl bg-white/10 p-4 text-sm text-primary-foreground/90">{panel.help}</div>
+        ) : (
+          <span />
+        )}
+      </aside>
+
+      {/* Phones get the normal header; laptops get a slim top row instead */}
+      <div className="lg:hidden">
+        <SiteHeader right={headerRight} logoLabel={logoLabel} />
+      </div>
+      <div className="flex min-h-screen flex-col lg:min-h-0">
+        <div className="hidden lg:flex h-16 items-center justify-end gap-3 px-10">{headerRight}</div>
+        <main className="flex-1 flex items-start lg:items-center justify-center px-4 sm:px-6 py-10">
+          <div className="w-full max-w-md space-y-4 lg:[&>div:first-child]:border-0 lg:[&>div:first-child]:shadow-none lg:[&>div:first-child>div]:px-0">
             {children}
           </div>
+        </main>
+        <div className="lg:hidden">
+          <SiteFooter showStaffLink={showStaffLink} />
         </div>
-      </main>
-      <SiteFooter showStaffLink={showStaffLink} />
+        <div className="hidden lg:flex justify-between px-10 py-6 text-sm text-muted-foreground">
+          <p>© {new Date().getFullYear()} Data Vault</p>
+          {showStaffLink && (
+            <Link href="/admin/login" className="hover:text-primary transition-colors">
+              Staff sign in
+            </Link>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
