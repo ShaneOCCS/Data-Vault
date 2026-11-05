@@ -29,6 +29,15 @@ type createInviteResponse struct {
 // bcrypt hash is ever stored (mirrors how recovery keys and the invite
 // token itself are handled everywhere else in this system).
 func (s *Server) CreateInvite(w http.ResponseWriter, r *http.Request) {
+	caller, err := s.Store.GetAdminByEmail(r.Context(), adminEmailFromContext(r.Context()))
+	if err != nil {
+		serverError(w)
+		return
+	}
+	if !requireSuperadmin(w, caller) {
+		return
+	}
+
 	var req createInviteRequest
 	if err := decodeJSON(w, r, &req); err != nil || req.Email == "" {
 		badRequest(w, "email is required")
@@ -68,6 +77,7 @@ type acceptInviteRequest struct {
 	Email    string `json:"email"`
 	Token    string `json:"token"`
 	Password string `json:"password"`
+	Name     string `json:"name"`
 }
 
 // AcceptInvite redeems an unused, unexpired invite and creates the new
@@ -77,8 +87,8 @@ type acceptInviteRequest struct {
 // invite.
 func (s *Server) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 	var req acceptInviteRequest
-	if err := decodeJSON(w, r, &req); err != nil || req.Email == "" || req.Token == "" || req.Password == "" {
-		badRequest(w, "email, token, and password are required")
+	if err := decodeJSON(w, r, &req); err != nil || req.Email == "" || req.Token == "" || req.Password == "" || req.Name == "" {
+		badRequest(w, "email, token, password, and name are required")
 		return
 	}
 	// Checked before the invite is even looked up, so a weak password can
@@ -110,7 +120,7 @@ func (s *Server) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 	// (see store.AcceptInviteAndCreateAdmin): a concurrent accept of the
 	// same token loses the claim, and a failed insert leaves the invite
 	// unspent.
-	err = s.Store.AcceptInviteAndCreateAdmin(ctx, matched.ID, req.Email, passwordHash)
+	err = s.Store.AcceptInviteAndCreateAdmin(ctx, matched.ID, req.Name, req.Email, passwordHash)
 	if errors.Is(err, store.ErrAlreadyUsed) {
 		s.auditFailure(r, req.Email, "admin_invite_accept", "invite_already_used")
 		genericError(w)
@@ -137,7 +147,7 @@ func (s *Server) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 	s.AdminSessions.SetAdminCookie(w, token)
 
 	s.audit(r, req.Email, "admin_invite_accepted", nil, nil)
-	writeJSON(w, http.StatusOK, adminSessionResponse{Email: req.Email})
+	writeJSON(w, http.StatusOK, adminSessionResponse{Email: req.Email, Name: req.Name})
 }
 
 // matchInviteToken bcrypt-compares plaintext against every candidate

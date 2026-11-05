@@ -92,7 +92,7 @@ func TestAcceptInviteCreatesAdmin(t *testing.T) {
 	ctx := context.Background()
 	id := insertInvite(t, st, "new@example.com", time.Now().Add(time.Hour))
 
-	if err := st.AcceptInviteAndCreateAdmin(ctx, id, "new@example.com", "pwhash"); err != nil {
+	if err := st.AcceptInviteAndCreateAdmin(ctx, id, "New Admin", "new@example.com", "pwhash"); err != nil {
 		t.Fatal(err)
 	}
 	admin, err := st.GetAdminByEmail(ctx, "new@example.com")
@@ -112,12 +112,12 @@ func TestAcceptInviteCreatesAdmin(t *testing.T) {
 func TestAcceptInviteForExistingAdminLeavesInviteUnspent(t *testing.T) {
 	st := store.New(testdb.New(t))
 	ctx := context.Background()
-	if err := st.InsertAdmin(ctx, "dup@example.com", "pwhash"); err != nil {
+	if err := st.InsertAdmin(ctx, "Dup Admin", "dup@example.com", "pwhash"); err != nil {
 		t.Fatal(err)
 	}
 	id := insertInvite(t, st, "dup@example.com", time.Now().Add(time.Hour))
 
-	err := st.AcceptInviteAndCreateAdmin(ctx, id, "dup@example.com", "pwhash2")
+	err := st.AcceptInviteAndCreateAdmin(ctx, id, "Dup Admin", "dup@example.com", "pwhash2")
 	if !errors.Is(err, store.ErrDuplicateAdminEmail) {
 		t.Fatalf("got %v, want ErrDuplicateAdminEmail", err)
 	}
@@ -136,7 +136,7 @@ func TestAcceptInviteOnlyOnceUnderConcurrency(t *testing.T) {
 	id := insertInvite(t, st, "race@example.com", time.Now().Add(time.Hour))
 
 	ok, errs := race(func() error {
-		return st.AcceptInviteAndCreateAdmin(ctx, id, "race@example.com", "pwhash")
+		return st.AcceptInviteAndCreateAdmin(ctx, id, "Race Admin", "race@example.com", "pwhash")
 	})
 	if ok != 1 {
 		t.Fatalf("%d concurrent accepts succeeded, want exactly 1", ok)
@@ -161,7 +161,7 @@ func TestAcceptExpiredInviteFails(t *testing.T) {
 	if _, err := pool.Exec(ctx, `UPDATE admin_invites SET expires_at = now() - interval '1 second' WHERE id = $1`, id); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.AcceptInviteAndCreateAdmin(ctx, id, "late@example.com", "pwhash"); !errors.Is(err, store.ErrAlreadyUsed) {
+	if err := st.AcceptInviteAndCreateAdmin(ctx, id, "Late Admin", "late@example.com", "pwhash"); !errors.Is(err, store.ErrAlreadyUsed) {
 		t.Fatalf("got %v, want ErrAlreadyUsed", err)
 	}
 	if _, err := st.GetAdminByEmail(ctx, "late@example.com"); !errors.Is(err, store.ErrNotFound) {
@@ -172,11 +172,35 @@ func TestAcceptExpiredInviteFails(t *testing.T) {
 func TestInsertAdminDuplicate(t *testing.T) {
 	st := store.New(testdb.New(t))
 	ctx := context.Background()
-	if err := st.InsertAdmin(ctx, "a@example.com", "h"); err != nil {
+	if err := st.InsertAdmin(ctx, "A Admin", "a@example.com", "h"); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.InsertAdmin(ctx, "a@example.com", "h"); !errors.Is(err, store.ErrDuplicateAdminEmail) {
+	if err := st.InsertAdmin(ctx, "A Admin", "a@example.com", "h"); !errors.Is(err, store.ErrDuplicateAdminEmail) {
 		t.Fatalf("got %v, want ErrDuplicateAdminEmail", err)
+	}
+}
+
+func TestListAdmins(t *testing.T) {
+	st := store.New(testdb.New(t))
+	ctx := context.Background()
+	if err := st.InsertAdmin(ctx, "A Admin", "a@example.com", "h"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.InsertAdmin(ctx, "B Admin", "b@example.com", "h"); err != nil {
+		t.Fatal(err)
+	}
+	admins, err := st.ListAdmins(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(admins) != 2 {
+		t.Fatalf("got %d admins, want 2", len(admins))
+	}
+	if admins[0].Email != "a@example.com" || admins[1].Email != "b@example.com" {
+		t.Fatalf("admins not in insertion order: %+v", admins)
+	}
+	if admins[0].Name != "A Admin" {
+		t.Fatalf("got name %q, want %q", admins[0].Name, "A Admin")
 	}
 }
 
@@ -202,5 +226,32 @@ func TestAdminRoleConstraint(t *testing.T) {
 	_, err := pool.Exec(context.Background(), `INSERT INTO admins (email, password_hash, role) VALUES ('x@example.com', 'h', 'viewer')`)
 	if err == nil {
 		t.Fatal("admin with an unknown role was inserted")
+	}
+}
+
+func TestListMembers(t *testing.T) {
+	st := store.New(testdb.New(t))
+	ctx := context.Background()
+	if err := st.InsertMember(ctx, "AAAA111"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.InsertMember(ctx, "BBBB222"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.MarkMemberRegistered(ctx, "AAAA111"); err != nil {
+		t.Fatal(err)
+	}
+	members, err := st.ListMembers(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(members) != 2 {
+		t.Fatalf("got %d members, want 2", len(members))
+	}
+	if members[0].KitID != "AAAA111" || !members[0].Registered {
+		t.Fatalf("expected AAAA111 to be registered, got %+v", members[0])
+	}
+	if members[1].KitID != "BBBB222" || members[1].Registered {
+		t.Fatalf("expected BBBB222 to be unregistered, got %+v", members[1])
 	}
 }

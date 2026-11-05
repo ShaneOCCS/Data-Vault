@@ -29,6 +29,7 @@ func TestAdminAllowed(t *testing.T) {
 		wantReason string
 	}{
 		{store.Admin{Active: true, Role: auth.AdminRoleSuperadmin}, true, ""},
+		{store.Admin{Active: true, Role: auth.AdminRoleAdmin}, true, ""},
 		{store.Admin{Active: false, Role: auth.AdminRoleSuperadmin}, false, "inactive"},
 		{store.Admin{Active: true, Role: "viewer"}, false, "role_not_permitted"},
 		{store.Admin{Active: true, Role: ""}, false, "role_not_permitted"},
@@ -238,6 +239,10 @@ func (h *harness) do(method, path string, body any, cookies ...*http.Cookie) *ht
 		}
 	}
 	req := httptest.NewRequest(method, path, &buf)
+	if body != nil {
+		// decodeJSON rejects anything that isn't application/json.
+		req.Header.Set("Content-Type", "application/json")
+	}
 	req.RemoteAddr = nextIP() + ":5555"
 	for _, c := range cookies {
 		req.AddCookie(c)
@@ -251,7 +256,7 @@ func (h *harness) adminCookie(email string) *http.Cookie {
 	h.t.Helper()
 	ctx := context.Background()
 	hash, _ := auth.HashPassword("a long enough password")
-	if err := h.srv.Store.InsertAdmin(ctx, email, hash); err != nil {
+	if err := h.srv.Store.InsertAdmin(ctx, "Test Admin", email, hash); err != nil {
 		h.t.Fatal(err)
 	}
 	tok, err := h.srv.AdminSessions.IssueAdmin(email)
@@ -311,6 +316,44 @@ func TestDisabledAdminSessionIsRevokedImmediately(t *testing.T) {
 	}
 	if got := h.auditReasons("admin_session_failed"); len(got) != 1 || got[0] != "inactive" {
 		t.Fatalf("audit reasons %v, want [inactive]", got)
+	}
+}
+
+func TestListAdminsRoleGating(t *testing.T) {
+	h := newHarness(t)
+	superCookie := h.adminCookie("super@example.com") // adminCookie's InsertAdmin defaults to superadmin
+	regularCookie := h.adminCookie("regular@example.com")
+	if _, err := h.pool.Exec(context.Background(), `UPDATE admins SET role = 'admin' WHERE email = 'regular@example.com'`); err != nil {
+		t.Fatal(err)
+	}
+
+	// Superadmin sees every admin.
+	rec := h.do("GET", "/api/admin/admins", nil, superCookie)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("superadmin list: got %d %s", rec.Code, rec.Body)
+	}
+	var superList []map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &superList); err != nil {
+		t.Fatal(err)
+	}
+	if len(superList) != 2 {
+		t.Fatalf("superadmin should see 2 admins, got %d: %s", len(superList), rec.Body)
+	}
+
+	// A regular admin sees only themselves — not the superadmin.
+	rec = h.do("GET", "/api/admin/admins", nil, regularCookie)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("regular admin list: got %d %s", rec.Code, rec.Body)
+	}
+	var regularList []map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &regularList); err != nil {
+		t.Fatal(err)
+	}
+	if len(regularList) != 1 {
+		t.Fatalf("regular admin should see only themselves, got %d: %s", len(regularList), rec.Body)
+	}
+	if regularList[0]["email"] != "regular@example.com" {
+		t.Fatalf("regular admin saw wrong entry: %+v", regularList[0])
 	}
 }
 
@@ -458,6 +501,7 @@ func TestAuditWriteFailureDoesNotFailRequest(t *testing.T) {
 	// An IP that isn't valid inet makes the audit insert fail; the login
 	// failure must still be reported normally.
 	req := httptest.NewRequest("POST", "/api/auth/login", strings.NewReader(`{"kitId":"NOPE234","code":"1"}`))
+	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Forwarded-For", "not-an-ip")
 	rec := httptest.NewRecorder()
 	h.routes.ServeHTTP(rec, req)

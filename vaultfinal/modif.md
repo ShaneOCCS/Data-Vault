@@ -273,42 +273,60 @@ UPDATE recovery_keys SET used_at = now() WHERE id = $1 AND used_at IS NULL
 
 ---
 
-## 4. CORS support for a cross-origin frontend (Phase 1)
+## 4. Deployment scripts, and an audit-log fix for IPv6 clients
 
-**Date:** 2026-11-02
+**Date:** 2026-10-07
 
 ### What changed
 
-The API now enforces an explicit CORS origin allowlist instead of being same-origin-only, so the Next.js frontend can be served from a different origin (e.g. `http://localhost:9002` during development, a production domain later) and still call this API with cookies.
+**1. Every command-line step of the deployment is now a script**, in `deploy/scripts/`. You run each one from your own computer in Git Bash; the scripts connect to the server themselves. `deploy/deploy.md` was rewritten around them in plain language.
 
-- New `CORS_ALLOWED_ORIGINS` env var (comma-separated bare origins, `scheme://host[:port]`). Empty/unset is a no-op (today's same-origin deployment behavior is unchanged).
-- New middleware wraps every route (`Routes()` now returns `s.CORS(mux)`): answers preflight `OPTIONS` requests, sets `Access-Control-Allow-Origin`/`-Credentials` for allowed origins, and rejects `POST` requests whose `Origin` header isn't on the allowlist (CSRF defense-in-depth).
-- `decodeJSON` now requires `Content-Type: application/json`, closing the gap where a cross-site form POST under a non-preflighted Content-Type (`text/plain`, `multipart/form-data`, etc.) could reach the JSON decoder without ever triggering a CORS preflight.
-- `*` is rejected outright as a value for `CORS_ALLOWED_ORIGINS` — this API authenticates with cookies, so a wildcard origin would defeat the point of the allowlist.
-- In production (`APP_ENV=production`), every origin must be `https://`, **except `http://localhost`**, which is explicitly allowed so the deployed, production-mode server can still be exercised from a local frontend dev server over an SSH tunnel.
+**Not included, on purpose:**
+- **HTTPS.** There is no public HTTPS address. The deployed API is reached through the SSH tunnel, and HTTPS can be added later.
+- **CORS.** The frontend technology isn't confirmed yet, so no frontend wiring was added. `CORS.md` (new) documents what the backend needs (allowed-origins setting, middleware, cookie `SameSite` and CSRF rules) and what the frontend must send, for when it's time. **No CORS code was added.**
 
-### Why
+| Script | Purpose |
+|---|---|
+| `00-check.sh` | Checks settings, tools, build/tests and SSH/sudo access. Changes nothing. |
+| `01-backup.sh` | RDS snapshot (automatic with the AWS CLI, or guided in the console) and `server.prev` copy of the running program. |
+| `02-migrate.sh` | Builds `cmd/migrate`, runs it **on the instance** as the DB owner (password asked there, hidden, never stored), and baselines a hand-migrated database on first run. |
+| `03-deploy.sh` | Refuses to run without a backup, installs the new program, restarts it and checks it started. |
+| `04-verify.sh` | On-box checks: service and log, 401s from the API, failed login present in `audit_log`, port 8080 closed to the internet. |
+| `05-smoke-test.sh` | 28 end-to-end PASS/FAIL checks, including the new protections and the audit log. Runs through an SSH tunnel (or against an address passed as an argument). |
+| `tunnel.sh` | Makes the deployed API reachable at `http://localhost:18080/api` through SSH. Session cookies work there because it's `localhost`, and port 8080 stays closed to the internet. |
+| `rollback.sh` | Restores `server.prev`; `--undo-migration` also reverts 0005. |
 
-The frontend (`frontend-kp`, Next.js) and this API are deployed separately, so a browser request between them is cross-origin by default and the browser blocks it unless the API opts in via CORS headers.
+**Supporting files:**
+- `deploy/scripts/lib.sh` and `deploy/scripts/remote/*.sh`: shared helpers, plus the parts that run on the instance.
+- `deploy/deploy.env.example`: the settings template.
+- `deploy/.gitattributes`: keeps `*.sh` files at LF line endings so they run on Windows and Linux.
+
+**How the scripts handle secrets:**
+- Database passwords are passed to `psql` and the migration tool through environment variables, never on a command line.
+- The app's connection string is read from `/etc/vaultfinal/vaultfinal.env` with `grep`, not by sourcing the file, so special characters in the password can't break it.
+
+**2. Bug fix: audit writes failed for IPv6 clients without a proxy.** `clientIP` cut the port off `RemoteAddr` at the last colon. For an IPv6 address like `[::1]:5555`, that left `[::1]`, which Postgres rejects for the `inet` column, so the audit row was not written.
+
+It now uses `net.SplitHostPort`, the same way the rate limiter already did.
+
+- **Who it affected:** only requests reaching the app directly over IPv6. Behind nginx, `X-Forwarded-For` already holds a plain address, so the AWS deployment was not affected.
+- **How it was found:** the audit-error logging added in entry #3 printed it while the smoke test ran against a local server.
 
 ### Files changed
 
-- `internal/config/config.go` — added `AllowedOrigins []string` to `Config`; added `parseOrigins(raw string, isProd bool) ([]string, error)` with the validation rules above; wired into `Load()`.
-- `internal/handlers/cors.go` (**new**) — the `Server.CORS` middleware.
-- `internal/handlers/handlers.go` — `Routes()` now wraps the mux in `s.CORS(...)`; `decodeJSON` enforces `Content-Type: application/json`.
-- `internal/handlers/handlers_test.go` — `TestDecodeJSONRejectsUnknownFields` updated to set `Content-Type` explicitly; added `TestDecodeJSONRejectsMissingContentType`, `TestDecodeJSONRejectsWrongContentType`, `TestCORSAllowedOriginPreflight`, `TestCORSDisallowedOriginPreflight`, `TestCORSDisallowedOriginPOSTRejected`, `TestCORSDisallowedOriginGETPassesThrough`, `TestCORSNoOriginHeaderPassesThroughUnchanged`.
-- `deploy/fetch-secrets.sh` — writes `CORS_ALLOWED_ORIGINS=http://localhost:9002` into `/etc/vaultfinal/vaultfinal.env` on the server.
-- `.env.example` — documents `CORS_ALLOWED_ORIGINS`.
-
-### What did *not* change
-
-- Same-origin deployments: with `CORS_ALLOWED_ORIGINS` unset, every request behaves exactly as before (middleware is a no-op).
-- Cookie `SameSite` attribute — still `Lax`. Moving to `SameSite=None` is Phase 2, once the frontend is served from a real domain over HTTPS (a `Secure` cookie can't use `SameSite=None` over plain `http://localhost`).
-- No `nginx`/TLS/domain changes — that's Phase 2.
+- `internal/handlers/handlers.go`: `clientIP` uses `net.SplitHostPort`.
+- `internal/handlers/handlers_test.go`: IPv6 case added to `TestClientIP`.
+- `deploy/deploy.md`: rewritten.
+- **New:** `CORS.md` (guide only, no code).
+- **New:** `deploy/scripts/` (8 scripts, `lib.sh`, `remote/`), `deploy/deploy.env.example`, `deploy/.gitattributes`.
+- `deploy/deploy.sh` is unchanged. `03-deploy.sh` replaces it but adds the backup check and the start-up check.
 
 ### Verification
 
-- `gofmt -l .`, `go build ./...`, `go vet ./...` all clean.
-- `go test ./... -v -run "CORS|DecodeJSON"` — all new/modified tests pass.
-- `go test ./...` — full existing suite passes unchanged.
-- Not yet run against the live EC2 deployment (next step).
+- `go build`, `go vet` and `go test ./...` pass.
+- All scripts pass `bash -n` and contain no CRLF line endings.
+- **Smoke test:** `05-smoke-test.sh` was run against a local server and a local PostgreSQL 18 database with all migrations applied: **28/28 checks passed**. The first run found the IPv6 bug above (8 audit checks failed, with `invalid input syntax for type inet: "[::1]"` in the log); after the fix, all checks pass with zero audit write errors.
+- **Migration script:** `remote/migrate.sh` was run against a local database migrated by hand, the same situation as RDS. It baselined 0001–0004 and applied only 0005.
+- **URL helpers:** the connection-string helpers were checked with a password containing `@ : / ? # % &`.
+- **Tunnel mode:** the smoke test was also run in tunnel mode, with `ssh` replaced by a stand-in that serves the app on the tunnel port. It opened the tunnel, passed 28/28 checks and closed the tunnel afterwards.
+- **Not tested here:** the SSH and systemd parts. They need the real EC2 instance, and there was no Linux test machine available (no Docker or shellcheck on this computer). They'll be exercised the first time you run steps 0–5.

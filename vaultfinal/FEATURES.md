@@ -406,6 +406,11 @@ Each integration test creates its own uniquely named, fully migrated database an
 
 Secrets are written to disk only in the env file. RDS and the app port are not reachable from the internet.
 
+**Step-by-step deployment:** `deploy/deploy.md` walks through check → backup → migration → deploy → verify → smoke test (→ rollback). Each step is one script in `deploy/scripts/`, run from your own computer. Settings go in `deploy/deploy.env` (template: `deploy.env.example`).
+
+- **Tunnel:** `tunnel.sh` makes the deployed API reachable at `http://localhost:18080/api` through SSH. There is no public HTTPS address yet.
+- **Frontend:** browsers can't call the API from another origin until CORS is added. See `CORS.md` (a guide; not implemented).
+
 ---
 
 ## 20. API reference
@@ -457,6 +462,8 @@ These are things I noticed while reading the code.
 - **Large provision batches can exceed the HTTP timeouts.** Since the limit went to 1000 members per request (modif #2), a full batch takes minutes of bcrypt work, far past the 30s `WriteTimeout`. The plaintext keys would then never reach the admin. Batches of about 200 or fewer are safe.
 - **Member sessions can't be revoked.** Only admin sessions are re-checked per request.
 - **The per-IP rate-limit map is never pruned.**
+- **No CORS support.** A browser frontend on another origin can't call the API yet. What's needed is described in `CORS.md`.
+- **No public HTTPS address.** The API is only reachable through the SSH tunnel for now.
 
 ### Resolved (see `modif.md` #3)
 

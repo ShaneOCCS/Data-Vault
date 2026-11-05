@@ -25,6 +25,7 @@ const adminTokenType = "admin"
 // lesser role can't accidentally inherit full access before the code that
 // limits it exists.
 const AdminRoleSuperadmin = "superadmin"
+const AdminRoleAdmin = "admin"
 
 // adminClaims is the JWT payload for a signed-in admin. Email identifies
 // the admin for the audit_log's actor_admin_email column.

@@ -155,6 +155,42 @@ func (s *Store) MarkMemberRegistered(ctx context.Context, kitID string) error {
 	return nil
 }
 
+// MemberSummary is the shape returned by ListMembers — deliberately omits
+// totp_secret_enc, which never leaves the store layer.
+type MemberSummary struct {
+	KitID      string    `json:"kitId"`
+	Registered bool      `json:"registered"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+// ListMembers returns every provisioned member (KIT ID), oldest first. Backs
+// the dashboard's KIT ID table and the barcode/document-upload dropdowns.
+// Read-only — any active admin can call it.
+func (s *Store) ListMembers(ctx context.Context) ([]MemberSummary, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, registered, created_at
+		FROM members
+		ORDER BY created_at ASC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("store: list members: %w", err)
+	}
+	defer rows.Close()
+
+	var out []MemberSummary
+	for rows.Next() {
+		var m MemberSummary
+		if err := rows.Scan(&m.KitID, &m.Registered, &m.CreatedAt); err != nil {
+			return nil, fmt.Errorf("store: scan member: %w", err)
+		}
+		out = append(out, m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store: list members rows: %w", err)
+	}
+	return out, nil
+}
+
 // =========================================================================
 // recovery_keys
 // =========================================================================
@@ -413,6 +449,7 @@ func (s *Store) LogAudit(ctx context.Context, principal, eventType, ipAddress st
 type Admin struct {
 	ID           int64
 	Email        string
+	Name         string
 	PasswordHash string
 	Role         string
 	Active       bool
@@ -424,10 +461,10 @@ type Admin struct {
 // the whole system: cmd/bootstrap-admin (the very first admin, run once
 // over SSH) and AcceptInvite (every admin after that) — never from an
 // unauthenticated HTTP endpoint (invariant #9).
-func (s *Store) InsertAdmin(ctx context.Context, email, passwordHash string) error {
+func (s *Store) InsertAdmin(ctx context.Context, name, email, passwordHash string) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO admins (email, password_hash) VALUES ($1, $2)
-	`, email, passwordHash)
+		INSERT INTO admins (name, email, password_hash) VALUES ($1, $2, $3)
+	`, name, email, passwordHash)
 	if isUniqueViolation(err) {
 		return ErrDuplicateAdminEmail
 	}
@@ -443,9 +480,9 @@ func (s *Store) InsertAdmin(ctx context.Context, email, passwordHash string) err
 func (s *Store) GetAdminByEmail(ctx context.Context, email string) (*Admin, error) {
 	var a Admin
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, email, password_hash, role, active, created_at, updated_at
+		SELECT id, email, name, password_hash, role, active, created_at, updated_at
 		FROM admins WHERE email = $1
-	`, email).Scan(&a.ID, &a.Email, &a.PasswordHash, &a.Role, &a.Active, &a.CreatedAt, &a.UpdatedAt)
+	`, email).Scan(&a.ID, &a.Email, &a.Name, &a.PasswordHash, &a.Role, &a.Active, &a.CreatedAt, &a.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -518,7 +555,7 @@ func (s *Store) GetPendingInvitesByEmail(ctx context.Context, email string) ([]A
 //     loser gets ErrAlreadyUsed);
 //   - if the admin insert fails (e.g. ErrDuplicateAdminEmail), the claim
 //     is rolled back and the invite stays redeemable.
-func (s *Store) AcceptInviteAndCreateAdmin(ctx context.Context, inviteID int64, email, passwordHash string) error {
+func (s *Store) AcceptInviteAndCreateAdmin(ctx context.Context, inviteID int64, name, email, passwordHash string) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("store: begin accept invite: %w", err)
@@ -537,8 +574,8 @@ func (s *Store) AcceptInviteAndCreateAdmin(ctx context.Context, inviteID int64, 
 	}
 
 	_, err = tx.Exec(ctx, `
-		INSERT INTO admins (email, password_hash) VALUES ($1, $2)
-	`, email, passwordHash)
+		INSERT INTO admins (name, email, password_hash, role) VALUES ($1, $2, $3, $4)
+	`, name, email, passwordHash, "admin")
 	if isUniqueViolation(err) {
 		return ErrDuplicateAdminEmail
 	}
@@ -550,4 +587,103 @@ func (s *Store) AcceptInviteAndCreateAdmin(ctx context.Context, inviteID int64, 
 		return fmt.Errorf("store: commit accept invite: %w", err)
 	}
 	return nil
+}
+
+// UpdateAdminName lets an admin change their own display name. The email
+// comes from the caller's own session (handlers.UpdateProfile), never a
+// request parameter, so there's no way to rename anyone else.
+func (s *Store) UpdateAdminName(ctx context.Context, email, name string) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE admins SET name = $1, updated_at = now() WHERE email = $2
+	`, name, email)
+	if err != nil {
+		return fmt.Errorf("store: update admin name: %w", err)
+	}
+	return nil
+}
+
+// AdminHasHistory reports whether email appears anywhere in audit_log (as
+// the principal or the acting admin) or admin_invites (as the invitee or
+// the inviter). DeleteAdmin's handler refuses to remove an admin with any
+// history -- hard-deleting them would orphan that accountability trail, so
+// they must be disabled (active = false) instead.
+func (s *Store) AdminHasHistory(ctx context.Context, email string) (bool, error) {
+	var has bool
+	err := s.pool.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM audit_log WHERE principal = $1 OR actor_admin_email = $1
+			UNION ALL
+			SELECT 1 FROM admin_invites WHERE email = $1 OR invited_by = $1
+		)
+	`, email).Scan(&has)
+	if err != nil {
+		return false, fmt.Errorf("store: check admin history: %w", err)
+	}
+	return has, nil
+}
+
+// CountActiveSuperadmins returns how many admins are both active and hold
+// the superadmin role -- DeleteAdmin's handler uses this to refuse a delete
+// that would leave the system with zero superadmins.
+func (s *Store) CountActiveSuperadmins(ctx context.Context) (int, error) {
+	var n int
+	err := s.pool.QueryRow(ctx, `
+		SELECT count(*) FROM admins WHERE role = 'superadmin' AND active = true
+	`).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("store: count active superadmins: %w", err)
+	}
+	return n, nil
+}
+
+// DeleteAdmin permanently removes an admin row. Callers must run
+// AdminHasHistory and, for a superadmin target, CountActiveSuperadmins
+// themselves first -- this function only performs the delete and reports
+// ErrNotFound if no row matched.
+func (s *Store) DeleteAdmin(ctx context.Context, email string) error {
+	tag, err := s.pool.Exec(ctx, `DELETE FROM admins WHERE email = $1`, email)
+	if err != nil {
+		return fmt.Errorf("store: delete admin: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// AdminSummary is the shape returned by ListAdmins — deliberately omits
+// password_hash, which never leaves the store layer.
+type AdminSummary struct {
+	Email     string    `json:"email"`
+	Name      string    `json:"name"`
+	Role      string    `json:"role"`
+	Active    bool      `json:"active"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// ListAdmins returns every admin account, oldest first. Backs the dashboard's
+// admin-management table. Read-only — any active admin can call it.
+func (s *Store) ListAdmins(ctx context.Context) ([]AdminSummary, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT email, name, role, active, created_at
+		FROM admins
+		ORDER BY created_at ASC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("store: list admins: %w", err)
+	}
+	defer rows.Close()
+
+	var out []AdminSummary
+	for rows.Next() {
+		var a AdminSummary
+		if err := rows.Scan(&a.Email, &a.Name, &a.Role, &a.Active, &a.CreatedAt); err != nil {
+			return nil, fmt.Errorf("store: scan admin: %w", err)
+		}
+		out = append(out, a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store: list admins rows: %w", err)
+	}
+	return out, nil
 }

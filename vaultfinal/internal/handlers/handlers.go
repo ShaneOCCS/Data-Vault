@@ -68,10 +68,14 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /api/admin/auth/logout", s.RequireAdminSession(s.AdminLogout))
 	mux.HandleFunc("POST /api/admin/invites", s.RequireAdminSession(s.CreateInvite))
 	mux.HandleFunc("POST /api/admin/invites/accept", limit(s.AcceptInvite))
+	mux.HandleFunc("POST /api/admin/profile", s.RequireAdminSession(s.UpdateProfile))
+	mux.HandleFunc("DELETE /api/admin/admins/{email}", s.RequireAdminSession(s.DeleteAdmin))
+	mux.HandleFunc("GET /api/admin/admins", s.RequireAdminSession(s.ListAdmins))
 
 	// --- admin member management ---
 	mux.HandleFunc("POST /api/admin/provision", s.RequireAdminSession(s.Provision))
 	mux.HandleFunc("POST /api/admin/members/{kitId}/recovery-keys", s.RequireAdminSession(s.TopUpRecoveryKeys))
+	mux.HandleFunc("GET /api/admin/members", s.RequireAdminSession(s.ListMembers))
 	mux.HandleFunc("POST /api/admin/ingest", s.RequireAdminSession(s.Ingest))
 
 	// --- member onboarding & auth ---

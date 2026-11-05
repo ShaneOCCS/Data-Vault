@@ -26,11 +26,15 @@ import (
 
 func main() {
 	email := flag.String("email", "", "email address for the first admin account")
+	name := flag.String("name", "", "display name for the first admin account")
 	password := flag.String("password", "", "password for the first admin account (omit to be prompted)")
 	flag.Parse()
 
 	if *email == "" {
 		log.Fatal("bootstrap-admin: --email is required")
+	}
+	if *name == "" {
+		log.Fatal("bootstrap-admin: --name is required")
 	}
 
 	if *password == "" {
@@ -63,7 +67,7 @@ func main() {
 	}
 
 	st := store.New(pool)
-	if err := st.InsertAdmin(ctx, *email, passwordHash); err != nil {
+	if err := st.InsertAdmin(ctx, *name, *email, passwordHash); err != nil {
 		log.Fatalf("bootstrap-admin: insert admin: %v", err)
 	}
 
