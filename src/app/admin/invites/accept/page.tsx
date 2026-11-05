@@ -2,9 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { Shield, Mail, KeyRound, User, Loader2, AlertCircle } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+import { Loader2, AlertCircle } from 'lucide-react';
+import { AuthShell, AuthCard } from '@/components/site/SiteShell';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -73,79 +72,57 @@ function AcceptInviteForm() {
   };
 
   return (
-    <Card className="w-full max-w-sm">
-      <CardHeader className="text-center">
-        <div className="mx-auto bg-primary/10 p-3 rounded-full w-fit mb-2">
-          <Shield className="h-6 w-6 text-primary" />
-        </div>
-        <CardTitle>Accept Admin Invite</CardTitle>
-        <CardDescription>Set up your name and password to activate your admin account.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {error && (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-        <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
-          <div className="relative">
-            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input id="email" value={email} readOnly className="pl-9 bg-muted" />
-          </div>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="name">Your Name</Label>
-          <div className="relative">
-            <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              id="name"
-              placeholder="Jane Doe"
-              className="pl-9"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAccept()}
-            />
-          </div>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="password">Choose a Password</Label>
-          <div className="relative">
-            <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              id="password"
-              type="password"
-              placeholder="12-72 characters"
-              className="pl-9"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAccept()}
-            />
-          </div>
-        </div>
-      </CardContent>
-      <CardFooter>
-        <Button className="w-full" onClick={handleAccept} disabled={loading || !linkRead}>
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Activate Account'}
+    <AuthCard
+      step="Staff"
+      title="Accept your admin invite"
+      description="Choose your name and a password to activate your admin account."
+      footer={
+        <Button className="w-full h-11 font-semibold" onClick={handleAccept} disabled={loading || !linkRead}>
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Activate account'}
         </Button>
-      </CardFooter>
-    </Card>
+      }
+    >
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+      <div className="space-y-2">
+        <Label htmlFor="email">Email</Label>
+        <Input id="email" value={email} readOnly className="h-11 bg-muted" />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="name">Your name</Label>
+        <Input
+          id="name"
+          placeholder="Jane Doe"
+          className="h-11"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleAccept()}
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="password">Choose a password</Label>
+        <Input
+          id="password"
+          type="password"
+          placeholder="12-72 characters"
+          className="h-11"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleAccept()}
+        />
+      </div>
+    </AuthCard>
   );
 }
 
 export default function AcceptInvitePage() {
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <header className="p-6">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="bg-primary p-1.5 rounded-lg"><Shield className="h-6 w-6 text-white" /></div>
-          <span className="font-bold text-xl text-primary tracking-tighter uppercase">Data Vault</span>
-        </Link>
-      </header>
-      <main className="flex-1 flex items-center justify-center px-6 py-12">
-        <AcceptInviteForm />
-      </main>
-    </div>
+    <AuthShell showStaffLink={false}>
+      <AcceptInviteForm />
+    </AuthShell>
   );
 }

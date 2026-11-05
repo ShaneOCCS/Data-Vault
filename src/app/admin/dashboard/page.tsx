@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Shield, LogOut, Users, Loader2, AlertCircle, FileText, IdCard, Pencil, LayoutGrid } from 'lucide-react';
+import { LogOut, Users, Loader2, AlertCircle, FileText, IdCard, Pencil, LayoutGrid } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +20,7 @@ import {
 } from '@/lib/admin-api';
 import { ApiError } from '@/lib/api';
 import { getAdminDisplayCache, setAdminDisplayCache, clearAdminDisplayCache } from '@/lib/admin-session-cache';
+import { SiteHeader } from '@/components/site/SiteShell';
 import { AdminsSection, type CreatedInvite } from '@/components/admin/AdminsSection';
 import { BarcodeGenerator } from '@/components/admin/BarcodeGenerator';
 import { KitIdListTab } from '@/components/admin/KitIdListTab';
@@ -122,24 +123,41 @@ export default function AdminDashboardPage() {
   const isSuperadmin = admins.find((a) => a.email === admin?.email)?.role === 'superadmin';
 
   if (!checked) {
-    return <div className="flex items-center justify-center h-screen text-muted-foreground">Checking access...</div>;
+    return <div className="min-h-screen bg-background" />;
   }
 
+  // LAYOUT (vishva-charts): same header/footer as the rest of the site, with
+  // the sections as tabs under the header instead of a sidebar.
   const navItemClass = (active: boolean) =>
-    `flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-      active ? 'bg-white/15 text-white' : 'text-white/70 hover:text-white hover:bg-white/10'
+    `inline-flex items-center gap-2 whitespace-nowrap border-b-2 px-1 py-3 text-sm font-medium transition-colors ${
+      active ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
     }`;
 
-  const sectionTitle = section === 'overview' ? 'Overview' : section === 'admins' ? 'Manage Admins' : 'KIT IDs';
+  const sideItemClass = (active: boolean) =>
+    `flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+      active ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+    }`;
 
   return (
-    <div className="min-h-screen flex bg-[#F4F6F9]">
-      <aside className="w-60 shrink-0 bg-primary flex flex-col p-4">
-        <div className="flex items-center gap-2 mb-8 px-1">
-          <div className="bg-white/15 p-1.5 rounded-lg"><Shield className="h-5 w-5 text-white" /></div>
-          <span className="font-bold text-sm text-white tracking-tighter uppercase">Data Vault Admin</span>
-        </div>
-        <nav className="flex flex-col gap-1">
+    <div className="min-h-screen flex flex-col bg-background">
+      <SiteHeader
+        fullWidth
+        logoHref="/admin/dashboard"
+        right={
+          <>
+            <span className="hidden sm:inline rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+              {isSuperadmin ? 'Super admin' : 'Admin'}
+            </span>
+            <span className="hidden md:inline text-sm text-muted-foreground">{admin?.email}</span>
+            <Button variant="outline" size="sm" onClick={handleLogout}>
+              <LogOut className="h-4 w-4 mr-2" /> Sign out
+            </Button>
+          </>
+        }
+      />
+      {/* Phones: sections as tabs under the header */}
+      <div className="border-b bg-white lg:hidden">
+        <nav className="flex w-full gap-6 overflow-x-auto px-4 sm:px-6">
           <button type="button" className={navItemClass(section === 'overview')} onClick={() => setSection('overview')}>
             <LayoutGrid className="h-4 w-4" /> Overview
           </button>
@@ -150,25 +168,25 @@ export default function AdminDashboardPage() {
             <IdCard className="h-4 w-4" /> KIT IDs
           </button>
         </nav>
-        <div className="mt-auto pt-4 border-t border-white/10">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full justify-start text-white/80 hover:text-white hover:bg-white/10"
-            onClick={handleLogout}
-          >
-            <LogOut className="h-4 w-4 mr-2" /> Sign Out
-          </Button>
-        </div>
-      </aside>
+      </div>
 
-      <div className="flex-1 min-w-0 flex flex-col">
-        <header className="bg-white border-b px-6 py-4 flex items-center justify-between">
-          <h2 className="font-semibold text-foreground">{sectionTitle}</h2>
-          <span className="text-sm text-muted-foreground">{admin?.email}</span>
-        </header>
-
-        <main className="p-6 max-w-6xl w-full mx-auto space-y-6">
+      <div className="flex-1 min-w-0 flex">
+        {/* Laptops: light sidebar, same look as the rest of the site */}
+        <aside className="hidden lg:flex w-60 shrink-0 flex-col border-r bg-white px-3 py-6">
+          <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Manage</p>
+          <nav className="flex flex-col gap-1">
+            <button type="button" className={sideItemClass(section === 'overview')} onClick={() => setSection('overview')}>
+              <LayoutGrid className="h-4 w-4" /> Overview
+            </button>
+            <button type="button" className={sideItemClass(section === 'admins')} onClick={() => setSection('admins')}>
+              <Users className="h-4 w-4" /> Admins
+            </button>
+            <button type="button" className={sideItemClass(section === 'kit')} onClick={() => setSection('kit')}>
+              <IdCard className="h-4 w-4" /> KIT IDs
+            </button>
+          </nav>
+        </aside>
+        <main className="flex-1 min-w-0 px-4 sm:px-8 py-8 max-w-5xl space-y-6">
           {(adminsFailed || membersFailed) && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
@@ -182,7 +200,7 @@ export default function AdminDashboardPage() {
             <>
               <div>
                 <div className="flex items-center gap-2">
-                  <h1 className="text-2xl font-bold">Welcome, {admin?.name}</h1>
+                  <h1 className="text-2xl font-semibold tracking-tight">Welcome, {admin?.name || admin?.email}</h1>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -192,7 +210,7 @@ export default function AdminDashboardPage() {
                     <Pencil className="h-4 w-4" />
                   </Button>
                 </div>
-                <p className="text-muted-foreground">Manage admin access, KIT IDs, and shared documents below.</p>
+                <p className="text-sm text-muted-foreground mt-1">Manage admins, KIT IDs and uploads.</p>
                 {editingName && (
                   <div className="flex items-center gap-2 mt-2">
                     <Input className="w-56 h-9" value={nameInput} onChange={(e) => setNameInput(e.target.value)} />
@@ -211,7 +229,7 @@ export default function AdminDashboardPage() {
                     <Users className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">{adminsFailed ? '—' : admins.length}</div>
+                    <div className="text-3xl font-semibold tracking-tight">{adminsFailed ? '—' : admins.length}</div>
                     <CardDescription>With portal access</CardDescription>
                   </CardContent>
                 </Card>
@@ -222,7 +240,7 @@ export default function AdminDashboardPage() {
                     <IdCard className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">{membersFailed ? '—' : members.length}</div>
+                    <div className="text-3xl font-semibold tracking-tight">{membersFailed ? '—' : members.length}</div>
                     <CardDescription>{membersFailed ? 'Not available' : `${members.filter((m) => m.registered).length} registered`}</CardDescription>
                   </CardContent>
                 </Card>
@@ -233,7 +251,7 @@ export default function AdminDashboardPage() {
                     <FileText className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">{lastIngest ? lastIngest.rowCount : '—'}</div>
+                    <div className="text-3xl font-semibold tracking-tight">{lastIngest ? lastIngest.rowCount : '—'}</div>
                     <CardDescription>{lastIngest ? `row(s) for ${lastIngest.kitId}` : 'No uploads yet this session'}</CardDescription>
                   </CardContent>
                 </Card>
@@ -278,6 +296,7 @@ export default function AdminDashboardPage() {
           )}
         </main>
       </div>
+      
     </div>
   );
 }
