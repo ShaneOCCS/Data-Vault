@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useT } from '@/lib/i18n';
 
 const PAGE_SIZE = 5;
 
@@ -39,17 +40,18 @@ interface ListPagerProps {
 }
 
 export function ListPager({ start, total, onUp, onDown }: ListPagerProps) {
+  const { t } = useT();
   if (total <= PAGE_SIZE) return null;
 
   return (
     <div className="flex items-center justify-end gap-2">
       <span className="text-xs text-muted-foreground">
-        {start + 1}–{Math.min(start + PAGE_SIZE, total)} of {total}
+        {t('{from}–{to} of {total}', { from: start + 1, to: Math.min(start + PAGE_SIZE, total), total })}
       </span>
-      <Button type="button" variant="outline" size="icon" className="h-8 w-8" onClick={onUp} disabled={!onUp} aria-label="Show previous rows">
+      <Button type="button" variant="outline" size="icon" className="h-8 w-8" onClick={onUp} disabled={!onUp} aria-label={t('Show previous rows')}>
         <ChevronUp className="h-4 w-4" />
       </Button>
-      <Button type="button" variant="outline" size="icon" className="h-8 w-8" onClick={onDown} disabled={!onDown} aria-label="Show next rows">
+      <Button type="button" variant="outline" size="icon" className="h-8 w-8" onClick={onDown} disabled={!onDown} aria-label={t('Show next rows')}>
         <ChevronDown className="h-4 w-4" />
       </Button>
     </div>

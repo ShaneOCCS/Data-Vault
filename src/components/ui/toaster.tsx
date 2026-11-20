@@ -1,7 +1,9 @@
 "use client"
 
 import { CheckCircle2, AlertTriangle, Info } from "lucide-react"
+import type { ReactNode } from "react"
 import { useToast } from "@/hooks/use-toast"
+import { useT } from "@/lib/i18n"
 import {
   Toast,
   ToastClose,
@@ -13,6 +15,9 @@ import {
 
 export function Toaster() {
   const { toasts } = useToast()
+  // Toast text is written in English at the call site and translated here.
+  const { t } = useT()
+  const tr = (n: ReactNode) => (typeof n === "string" ? t(n) : n)
 
   return (
     <ToastProvider>
@@ -30,9 +35,9 @@ export function Toaster() {
           <Toast key={id} variant={variant} {...props}>
             <Icon className={`h-5 w-5 mt-0.5 shrink-0 ${iconColor}`} />
             <div className="grid gap-1">
-              {title && <ToastTitle>{title}</ToastTitle>}
+              {title && <ToastTitle>{tr(title)}</ToastTitle>}
               {description && (
-                <ToastDescription>{description}</ToastDescription>
+                <ToastDescription>{tr(description)}</ToastDescription>
               )}
             </div>
             {action}

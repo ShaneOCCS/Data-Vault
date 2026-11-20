@@ -16,6 +16,22 @@ export default {
         code: ['monospace'],
       },
       colors: {
+        // Status colours swap for colour-blind mode / dark mode (see globals.css)
+        panel: 'hsl(var(--panel))',
+        status: {
+          good: 'hsl(var(--status-good))',
+          'good-soft': 'hsl(var(--status-good-soft))',
+          'good-ink': 'hsl(var(--status-good-ink))',
+          'good-line': 'hsl(var(--status-good-line))',
+          warn: 'hsl(var(--status-warn))',
+          'warn-soft': 'hsl(var(--status-warn-soft))',
+          'warn-ink': 'hsl(var(--status-warn-ink))',
+          'warn-line': 'hsl(var(--status-warn-line))',
+          bad: 'hsl(var(--status-bad))',
+          'bad-soft': 'hsl(var(--status-bad-soft))',
+          'bad-ink': 'hsl(var(--status-bad-ink))',
+          'bad-line': 'hsl(var(--status-bad-line))',
+        },
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',
         card: {

@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { buildInviteLink, createInvite, type AdminSummary } from '@/lib/admin-api';
 import { ApiError } from '@/lib/api';
 import { ListPager, usePagedList } from '@/components/admin/ListPager';
+import { useT } from '@/lib/i18n';
 
 export interface CreatedInvite {
   email: string;
@@ -28,6 +29,7 @@ interface AdminsSectionProps {
 
 export function AdminsSection({ admins, isSuperadmin, lastInvite, onInviteCreated }: AdminsSectionProps) {
   const { toast } = useToast();
+  const { t, locale } = useT();
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState('');
@@ -46,7 +48,7 @@ export function AdminsSection({ admins, isSuperadmin, lastInvite, onInviteCreate
       const result = await createInvite(inviteEmail);
       onInviteCreated(result);
       setInviteEmail('');
-      toast({ variant: 'success', title: 'Invite Created', description: `Please share the link below with ${result.email}.` });
+      toast({ variant: 'success', title: 'Invite created', description: t('Please share the link below with {email}.', { email: result.email }) });
     } catch (e) {
       // 403 here means the logged-in admin isn't a superadmin — surface that directly.
       const message = e instanceof ApiError ? e.message : "Please try again — we couldn't create this invite.";
@@ -64,11 +66,11 @@ export function AdminsSection({ admins, isSuperadmin, lastInvite, onInviteCreate
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Manage Admins</CardTitle>
+        <CardTitle>{t('Manage admins')}</CardTitle>
         <CardDescription>
           {isSuperadmin
-            ? "Admin accounts with portal access. Removing or disabling an admin isn't available in the app yet."
-            : 'Your admin account.'}
+            ? t("Admin accounts with portal access. Removing or disabling an admin isn't available in the app yet.")
+            : t('Your admin account.')}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -79,12 +81,12 @@ export function AdminsSection({ admins, isSuperadmin, lastInvite, onInviteCreate
             {inviteError && (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{inviteError}</AlertDescription>
+                <AlertDescription>{t(inviteError)}</AlertDescription>
               </Alert>
             )}
             <div className="flex items-end gap-3">
               <div className="space-y-1.5 flex-1">
-                <Label htmlFor="invite-email">Invite by Email</Label>
+                <Label htmlFor="invite-email">{t('Invite by email')}</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -99,17 +101,17 @@ export function AdminsSection({ admins, isSuperadmin, lastInvite, onInviteCreate
                 </div>
               </div>
               <Button onClick={handleInvite} disabled={inviting} className="h-10">
-                {inviting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Create Invite'}
+                {inviting ? <Loader2 className="h-4 w-4 animate-spin" /> : t('Create invite')}
               </Button>
             </div>
             {lastInvite && (
               <Alert>
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription className="space-y-2">
-                  <p>Share this link with {lastInvite.email} — it expires {new Date(lastInvite.expiresAt).toLocaleString()}.</p>
+                  <p>{t('Share this link with {email} — it expires {date}.', { email: lastInvite.email, date: new Date(lastInvite.expiresAt).toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' }) })}</p>
                   <div className="flex items-center gap-2">
                     <code className="text-xs bg-muted px-2 py-1 rounded flex-1 truncate">{inviteLink}</code>
-                    <Button variant="ghost" size="sm" onClick={handleCopyInviteLink} aria-label="Copy invite link">
+                    <Button variant="ghost" size="sm" onClick={handleCopyInviteLink} aria-label={t('Copy invite link')}>
                       <Copy className="h-4 w-4" />
                     </Button>
                   </div>
@@ -121,7 +123,7 @@ export function AdminsSection({ admins, isSuperadmin, lastInvite, onInviteCreate
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              Only superadmins can invite new admins. Please ask one if you need a new admin added.
+              {t('Only superadmins can invite new admins. Please ask one if you need a new admin added.')}
             </AlertDescription>
           </Alert>
         )}
@@ -135,10 +137,10 @@ export function AdminsSection({ admins, isSuperadmin, lastInvite, onInviteCreate
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-xs px-2 py-1 rounded-full font-medium bg-muted text-muted-foreground">
-                  {a.role}
+                  {a.role === 'superadmin' ? t('Super admin') : a.role === 'admin' ? t('Admin') : a.role}
                 </span>
-                <span className={`text-xs px-2 py-1 rounded-full font-medium ${a.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                  {a.active ? 'Active' : 'Inactive'}
+                <span className={`text-xs px-2 py-1 rounded-full font-medium ${a.active ? 'bg-status-good-soft text-status-good-ink' : 'bg-status-bad-soft text-status-bad-ink'}`}>
+                  {a.active ? t('Active') : t('Inactive')}
                 </span>
               </div>
             </div>

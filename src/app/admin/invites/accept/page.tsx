@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { acceptInvite } from '@/lib/admin-api';
 import { ApiError, isRateLimited, RATE_LIMIT_MESSAGE } from '@/lib/api';
 import { setAdminDisplayCache } from '@/lib/admin-session-cache';
+import { useT } from '@/lib/i18n';
 
 function acceptErrorMessage(e: unknown): string {
   if (isRateLimited(e)) return RATE_LIMIT_MESSAGE;
@@ -23,6 +24,7 @@ function acceptErrorMessage(e: unknown): string {
 
 function AcceptInviteForm() {
   const router = useRouter();
+  const { t } = useT();
   const [email, setEmail] = useState('');
   const [token, setToken] = useState('');
   const [linkRead, setLinkRead] = useState(false);
@@ -78,22 +80,22 @@ function AcceptInviteForm() {
       description="Choose your name and a password to activate your admin account."
       footer={
         <Button className="w-full h-11 font-semibold" onClick={handleAccept} disabled={loading || !linkRead}>
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Activate account'}
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : t('Activate account')}
         </Button>
       }
     >
       {error && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription>{t(error)}</AlertDescription>
         </Alert>
       )}
       <div className="space-y-2">
-        <Label htmlFor="email">Email</Label>
+        <Label htmlFor="email">{t('Email')}</Label>
         <Input id="email" value={email} readOnly className="h-11 bg-muted" />
       </div>
       <div className="space-y-2">
-        <Label htmlFor="name">Your name</Label>
+        <Label htmlFor="name">{t('Your name')}</Label>
         <Input
           id="name"
           placeholder="Jane Doe"
@@ -104,11 +106,11 @@ function AcceptInviteForm() {
         />
       </div>
       <div className="space-y-2">
-        <Label htmlFor="password">Choose a password</Label>
+        <Label htmlFor="password">{t('Choose a password')}</Label>
         <Input
           id="password"
           type="password"
-          placeholder="12-72 characters"
+          placeholder={t('12-72 characters')}
           className="h-11"
           value={password}
           onChange={(e) => setPassword(e.target.value)}

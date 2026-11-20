@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { adminLogin } from '@/lib/admin-api';
 import { isRateLimited, RATE_LIMIT_MESSAGE } from '@/lib/api';
 import { setAdminDisplayCache } from '@/lib/admin-session-cache';
+import { useT } from '@/lib/i18n';
 
 const panel: AuthPanel = {
   title: 'Staff access',
@@ -21,11 +22,16 @@ const panel: AuthPanel = {
     { title: 'Upload results', body: 'Upload a CSV to a KIT ID so its owner can see it on their dashboard.' },
     { title: 'Manage access', body: 'See every KIT ID, top up recovery keys and manage other admins.' },
   ],
-  help: <>Need an account? Ask a super admin to send you an invite.</>,
 };
+
+function Help() {
+  const { t } = useT();
+  return <>{t('Need an account? Ask a super admin to send you an invite.')}</>;
+}
 
 export default function AdminLoginPage() {
   const router = useRouter();
+  const { t } = useT();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -58,25 +64,25 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <AuthShell showStaffLink={false} panel={panel}>
+    <AuthShell showStaffLink={false} panel={{ ...panel, help: <Help /> }}>
       <AuthCard
         step="Staff"
         title="Staff sign in"
         description="Sign in with your admin email and password."
         footer={
           <Button className="w-full h-11 font-semibold" onClick={handleLogin} disabled={loading}>
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Sign in'}
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : t('Sign in')}
           </Button>
         }
       >
         {sessionExpired && !error && (
           <Alert>
             <AlertCircle className="h-4 w-4" />
-            <AlertDescription>Your session has ended. Please sign in again.</AlertDescription>
+            <AlertDescription>{t('Your session has ended. Please sign in again.')}</AlertDescription>
           </Alert>
         )}
         <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
+          <Label htmlFor="email">{t('Email')}</Label>
           <Input
             id="email"
             type="email"
@@ -89,7 +95,7 @@ export default function AdminLoginPage() {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="password">Password</Label>
+          <Label htmlFor="password">{t('Password')}</Label>
           <Input
             id="password"
             type="password"
@@ -104,12 +110,12 @@ export default function AdminLoginPage() {
         {error && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription>{t(error)}</AlertDescription>
           </Alert>
         )}
       </AuthCard>
       <AuthNote>
-        Not staff? <Link href="/login" className="font-medium text-primary hover:underline">Patient sign in</Link>
+        {t('Not staff?')} <Link href="/login" className="font-medium text-primary hover:underline">{t('Patient sign in')}</Link>
       </AuthNote>
     </AuthShell>
   );

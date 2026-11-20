@@ -16,10 +16,12 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { topUpRecoveryKeys } from '@/lib/admin-api';
 import { ApiError } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 
 // Mounted only while open, so each KIT ID starts with a clean form.
 export function TopUpKeysDialog({ kitId, onClose }: { kitId: string; onClose: () => void }) {
   const { toast } = useToast();
+  const { t } = useT();
   const [count, setCount] = useState(3);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -46,22 +48,22 @@ export function TopUpKeysDialog({ kitId, onClose }: { kitId: string; onClose: ()
   const handleCopy = () => {
     if (!keys) return;
     navigator.clipboard?.writeText(`KIT ID: ${kitId}\nRecovery keys:\n${keys.join('\n')}`);
-    toast({ variant: 'success', title: 'Copied', description: `Please paste this somewhere safe — ${kitId}'s recovery keys won't be shown again.` });
+    toast({ variant: 'success', title: 'Copied', description: t("Please paste this somewhere safe — {kitId}'s recovery keys won't be shown again.", { kitId }) });
   };
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Top Up Recovery Keys</DialogTitle>
+          <DialogTitle>{t('Top up recovery keys')}</DialogTitle>
           <DialogDescription>
-            Generate new recovery keys for {kitId}. These are shown once — copy them now.
+            {t('Generate new recovery keys for {kitId}. These are shown once — copy them now.', { kitId })}
           </DialogDescription>
         </DialogHeader>
         {!keys ? (
           <>
             <div className="space-y-1.5 py-2">
-              <Label htmlFor="topup-count">How many? (1–10)</Label>
+              <Label htmlFor="topup-count">{t('How many? (1–10)')}</Label>
               <Input
                 id="topup-count"
                 type="number"
@@ -74,11 +76,11 @@ export function TopUpKeysDialog({ kitId, onClose }: { kitId: string; onClose: ()
             {error && (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
+                <AlertDescription>{t(error)}</AlertDescription>
               </Alert>
             )}
             <Button onClick={handleTopUp} disabled={submitting} className="w-full">
-              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Generate Keys'}
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : t('Generate keys')}
             </Button>
           </>
         ) : (
@@ -89,10 +91,10 @@ export function TopUpKeysDialog({ kitId, onClose }: { kitId: string; onClose: ()
               ))}
             </div>
             <Button onClick={handleCopy} variant="outline" className="w-full">
-              <Copy className="h-4 w-4 mr-2" /> Copy All
+              <Copy className="h-4 w-4 mr-2" /> {t('Copy all')}
             </Button>
             <Button onClick={onClose} className="w-full">
-              Done
+              {t('Done')}
             </Button>
           </>
         )}

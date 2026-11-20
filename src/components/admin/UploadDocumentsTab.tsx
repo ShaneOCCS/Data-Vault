@@ -18,6 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 import { ingestCsv, type MemberSummary } from '@/lib/admin-api';
 import { ApiError } from '@/lib/api';
 import { BarcodeScannerDialog } from '@/components/admin/BarcodeScannerDialog';
+import { useT } from '@/lib/i18n';
 
 export interface LastIngest {
   kitId: string;
@@ -38,6 +39,7 @@ function fileMatchesKitId(fileName: string, kitId: string) {
 
 export function UploadDocumentsTab({ members, lastIngest, onIngested }: UploadDocumentsTabProps) {
   const { toast } = useToast();
+  const { t } = useT();
   const [selectedKitId, setSelectedKitId] = useState('');
   const [kitSearch, setKitSearch] = useState('');
   const [uploadError, setUploadError] = useState('');
@@ -59,7 +61,7 @@ export function UploadDocumentsTab({ members, lastIngest, onIngested }: UploadDo
     e.target.value = ''; // so picking the same file again after fixing a problem still fires this handler
     if (!file || !selectedKitId) return;
     if (!fileMatchesKitId(file.name, selectedKitId)) {
-      setUploadError(`This file is named "${file.name}", but ${selectedKitId} needs a file named ${selectedKitId}.csv. Please check that this is the right person's file.`);
+      setUploadError(t("This file is named \"{file}\", but {kitId} needs a file named {kitId}.csv. Please check that this is the right person's file.", { file: file.name, kitId: selectedKitId }));
       return;
     }
     setUploading(true);
@@ -67,7 +69,7 @@ export function UploadDocumentsTab({ members, lastIngest, onIngested }: UploadDo
     try {
       const result = await ingestCsv(selectedKitId, file);
       onIngested({ kitId: selectedKitId, batchId: result.batchId, rowCount: result.rowCount });
-      toast({ variant: 'success', title: 'CSV Ingested', description: `Please note — ${result.rowCount} row(s) added for ${selectedKitId}.` });
+      toast({ variant: 'success', title: 'CSV uploaded', description: t('{n} row(s) added for {kitId}.', { n: result.rowCount, kitId: selectedKitId }) });
     } catch (e) {
       const message = e instanceof ApiError ? e.message : "Please try again — we couldn't ingest that file.";
       setUploadError(message);
@@ -82,10 +84,10 @@ export function UploadDocumentsTab({ members, lastIngest, onIngested }: UploadDo
     if (match) {
       setSelectedKitId(match.kitId);
       setKitSearch('');
-      toast({ variant: 'success', title: 'KIT ID Scanned', description: `Selected ${match.kitId}.` });
+      toast({ variant: 'success', title: 'KIT ID scanned', description: t('Selected {kitId}.', { kitId: match.kitId }) });
     } else {
       setKitSearch(normalized);
-      toast({ variant: 'destructive', title: 'No Match Found', description: `"${normalized}" doesn't match any known KIT ID. Please check and try again.` });
+      toast({ variant: 'destructive', title: 'No match found', description: t("\"{value}\" doesn't match any known KIT ID. Please check and try again.", { value: normalized }) });
     }
   };
 
@@ -97,25 +99,25 @@ export function UploadDocumentsTab({ members, lastIngest, onIngested }: UploadDo
   return (
     <Card>
       <CardHeader>
-        <CardTitle>KIT ID Documents</CardTitle>
+        <CardTitle>{t('KIT ID documents')}</CardTitle>
         <CardDescription>
-          Please upload a CSV for a KIT ID — each row becomes a record its owner can view on their personal dashboard. The file must be named after the KIT ID, for example QS9KAH6.csv. Uploads can&apos;t be removed from the app, and only your most recent one is shown below.
+          {t("Please upload a CSV for a KIT ID — each row becomes a record its owner can view on their personal dashboard. The file must be named after the KIT ID, for example QS9KAH6.csv. Uploads can't be removed from the app, and only your most recent one is shown below.")}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {uploadError && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{uploadError}</AlertDescription>
+            <AlertDescription>{t(uploadError)}</AlertDescription>
           </Alert>
         )}
         <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
           <div className="space-y-1.5 flex-1">
-            <Label>KIT ID</Label>
+            <Label>{t('KIT ID')}</Label>
             <div className="relative mb-2">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search by KIT ID..."
+                placeholder={t('Search by KIT ID...')}
                 value={kitSearch}
                 onChange={(e) => setKitSearch(e.target.value)}
                 className="pl-9"
@@ -123,25 +125,25 @@ export function UploadDocumentsTab({ members, lastIngest, onIngested }: UploadDo
             </div>
             <Select value={selectedKitId} onValueChange={setSelectedKitId}>
               <SelectTrigger>
-                <SelectValue placeholder="Select a KIT ID" />
+                <SelectValue placeholder={t('Select a KIT ID')} />
               </SelectTrigger>
               <SelectContent>
                 {filteredMembers.length === 0 && (
-                  <div className="px-3 py-2 text-sm text-muted-foreground">No KIT IDs match &quot;{kitSearch}&quot;.</div>
+                  <div className="px-3 py-2 text-sm text-muted-foreground">{t('No KIT IDs match "{q}".', { q: kitSearch })}</div>
                 )}
                 {filteredMembers.map((m) => (
                   <SelectItem key={m.kitId} value={m.kitId}>
-                    {m.kitId} — {m.registered ? 'Registered' : 'Pending'}
+                    {m.kitId} — {m.registered ? t('Registered') : t('Pending')}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <Button variant="outline" onClick={() => setScannerOpen(true)} className="h-10">
-            <ScanLine className="h-4 w-4 mr-2" /> Scan Barcode
+            <ScanLine className="h-4 w-4 mr-2" /> {t('Scan barcode')}
           </Button>
           <Button onClick={handleUploadClick} disabled={uploading} className="h-10">
-            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Upload className="h-4 w-4 mr-2" /> Upload File</>}
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Upload className="h-4 w-4 mr-2" /> {t('Upload file')}</>}
           </Button>
           <input
             ref={fileInputRef}
@@ -153,11 +155,11 @@ export function UploadDocumentsTab({ members, lastIngest, onIngested }: UploadDo
         </div>
 
         {lastIngest && (
-          <div className="border rounded-lg px-4 py-3 flex items-center gap-3 bg-green-50 border-green-200">
-            <div className="bg-green-100 p-2 rounded-lg"><FileText className="h-4 w-4 text-green-700" /></div>
+          <div className="border rounded-lg px-4 py-3 flex items-center gap-3 bg-status-good-soft border-status-good-line">
+            <div className="bg-status-good-soft p-2 rounded-lg"><FileText className="h-4 w-4 text-status-good-ink" /></div>
             <div>
-              <p className="font-medium text-sm text-green-800">{lastIngest.rowCount} row(s) ingested for {lastIngest.kitId}</p>
-              <p className="text-xs text-green-700">Batch {lastIngest.batchId}</p>
+              <p className="font-medium text-sm text-status-good-ink">{t('{n} row(s) uploaded for {kitId}', { n: lastIngest.rowCount, kitId: lastIngest.kitId })}</p>
+              <p className="text-xs text-status-good-ink">{t('Batch {id}', { id: lastIngest.batchId })}</p>
             </div>
           </div>
         )}

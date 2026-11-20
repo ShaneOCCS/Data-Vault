@@ -6,22 +6,24 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { AuthShell, type AuthPanel } from '@/components/site/SiteShell';
+import { useT } from '@/lib/i18n';
 
 function LoginContent() {
   const searchParams = useSearchParams();
   const isLoggedOut = searchParams.get('logout') === 'success';
   const recoverMode = searchParams.get('recover') === '1';
+  const { t } = useT();
 
   const panel: AuthPanel = recoverMode
     ? {
         title: 'Lost your phone?',
-        intro: 'You can still get in with a recovery key.',
+        intro: 'You can still get in with a recovery key, one of the backup codes printed on your kit card.',
         points: [
-          { title: 'Find your recovery keys', body: 'They came with your KIT ID and setup code. Check wherever you saved them.' },
-          { title: 'Enter your KIT ID and one key', body: 'Each key works once, so cross it off after.' },
+          { title: 'Find your kit card', body: 'Your recovery keys are printed on it, below your KIT ID and setup code.' },
+          { title: 'Enter your KIT ID and one recovery key', body: 'Each key works only once. Cross it off after you use it.' },
           { title: 'Connect your new phone', body: 'Scan a new QR code with your authenticator app.' },
         ],
-        help: <>Lost your recovery keys too? Contact the clinic that gave you your kit.</>,
+        help: <>{t('No recovery keys left, or lost your card? Contact the clinic that gave you your kit.')}</>,
       }
     : {
         title: 'Welcome back',
@@ -32,9 +34,9 @@ function LoginContent() {
         ],
         help: (
           <>
-            Lost your phone?{' '}
-            <Link href="/login?recover=1" className="font-semibold text-white underline underline-offset-2">
-              Recover access
+            {t('Lost your phone?')}{' '}
+            <Link href="/login?recover=1" className="font-semibold text-primary underline underline-offset-2">
+              {t('Recover access')}
             </Link>
           </>
         ),
@@ -43,9 +45,9 @@ function LoginContent() {
   return (
     <AuthShell panel={panel}>
       {isLoggedOut && (
-        <div className="flex items-center gap-3 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+        <div className="flex items-center gap-3 rounded-xl border border-status-good-line bg-status-good-soft px-4 py-3 text-sm text-status-good-ink">
           <CheckCircle2 className="h-4 w-4" />
-          <span>You&apos;ve been signed out.</span>
+          <span>{t("You've been signed out.")}</span>
         </div>
       )}
       <LoginFlow />

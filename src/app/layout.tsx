@@ -3,6 +3,8 @@ import type {Metadata} from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
+import { PreferencesProvider, PREFS_BOOT_SCRIPT } from '@/lib/preferences';
+import { SettingsMenu } from '@/components/site/SettingsMenu';
 
 // next/font downloads the font at build time and serves it from this app, so
 // visitors' browsers never contact Google.
@@ -30,11 +32,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={inter.variable}>
+    // suppressHydrationWarning: PREFS_BOOT_SCRIPT sets lang / dark / text size on
+    // <html> before React loads, so the server HTML and the page differ there on purpose.
+    <html lang="en-CA" className={inter.variable} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: PREFS_BOOT_SCRIPT }} />
+      </head>
       <body className="font-body antialiased selection:bg-accent/30">
         <script dangerouslySetInnerHTML={{ __html: LOCALHOST_REDIRECT }} />
-        {children}
-        <Toaster />
+        <PreferencesProvider>
+          {children}
+          <SettingsMenu />
+          <Toaster />
+        </PreferencesProvider>
       </body>
     </html>
   );

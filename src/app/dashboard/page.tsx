@@ -30,9 +30,11 @@ import { getMemberSession, getRecords, getRecord, groupRecordsByUpload, memberLo
 import { ApiError } from '@/lib/api';
 import { HealthSummary } from '@/components/health/HealthSummary';
 import { SiteHeader, SiteFooter } from '@/components/site/SiteShell';
+import { useT } from '@/lib/i18n';
 
 export default function DashboardPage() {
   const { toast } = useToast();
+  const { t, locale } = useT();
   const router = useRouter();
   const [session, setSession] = useState<SessionResponse | null>(null);
   const [checked, setChecked] = useState(false); // distinguishes "still checking" from "confirmed signed out", so we don't flash a message before the real session check finishes
@@ -85,7 +87,7 @@ export default function DashboardPage() {
         router.push('/login');
         return;
       }
-      toast({ variant: 'destructive', title: 'Could Not Load Record', description: "Please try again — we couldn't open that record." });
+      toast({ variant: 'destructive', title: 'Could not load record', description: "Please try again — we couldn't open that record." });
     } finally {
       setLoadingRecord(false);
     }
@@ -93,7 +95,7 @@ export default function DashboardPage() {
 
   const handleLogout = async () => {
     toast({
-      title: "Securing Your Session",
+      title: 'Securing your session',
       description: "Please wait a moment while we log you out.",
     });
     try {
@@ -116,18 +118,18 @@ export default function DashboardPage() {
           <>
             <span className="hidden sm:inline font-mono text-sm text-muted-foreground">{session?.kitId}</span>
             <Button variant="outline" size="sm" onClick={handleLogout}>
-              <LogOut className="mr-2 h-4 w-4" /> Sign out
+              <LogOut className="mr-2 h-4 w-4" /> {t('Sign out')}
             </Button>
           </>
         }
       />
 
-      <main className="flex-1 flex flex-col min-w-0">
+      <main id="main" className="flex-1 flex flex-col min-w-0">
         <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Your records</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">{t('Your records')}</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              {session ? <>Everything shared with KIT ID <span className="font-mono font-semibold text-foreground">{session.kitId}</span>.</> : 'Checking your session…'}
+              {session ? <>{t('Everything shared with KIT ID')} <span className="font-mono font-semibold text-foreground">{session.kitId}</span>.</> : t('Checking your session…')}
             </p>
           </div>
 
@@ -137,23 +139,23 @@ export default function DashboardPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Your uploads</CardTitle>
-              <p className="text-sm text-muted-foreground">Records your admin has added for your KIT ID.</p>
+              <CardTitle>{t('Your uploads')}</CardTitle>
+              <p className="text-sm text-muted-foreground">{t('Records your admin has added for your KIT ID.')}</p>
             </CardHeader>
             <CardContent>
               {!checked && (
                 <div className="p-6 text-center text-sm text-muted-foreground border border-dashed rounded-lg">
-                  Checking your session…
+                  {t('Checking your session…')}
                 </div>
               )}
               {checked && recordsFailed && (
                 <div className="p-6 text-center text-sm text-destructive border border-dashed rounded-lg">
-                  We couldn&apos;t load your records. Please refresh the page to try again.
+                  {t("We couldn't load your records. Please refresh the page to try again.")}
                 </div>
               )}
               {checked && !recordsFailed && records.length === 0 && (
                 <div className="p-6 text-center text-sm text-muted-foreground border border-dashed rounded-lg">
-                  No records yet — please check back once your admin uploads one.
+                  {t('No records yet — please check back once your admin uploads one.')}
                 </div>
               )}
               {checked && uploads.length > 0 && (
@@ -161,7 +163,7 @@ export default function DashboardPage() {
                   {uploads.map((upload) => (
                     <section key={upload.batchId}>
                       <h3 className="text-xs font-bold text-muted-foreground uppercase">
-                        Uploaded {new Date(upload.createdAt).toLocaleString()}
+                        {t('Uploaded {date}', { date: new Date(upload.createdAt).toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' }) })}
                       </h3>
                       <div className="divide-y">
                         {upload.records.map((r) => (
@@ -170,7 +172,7 @@ export default function DashboardPage() {
                               <div className="bg-primary/10 p-2 rounded-lg">
                                 <FileText className="h-4 w-4 text-primary" />
                               </div>
-                              <p className="text-sm font-bold text-primary">Record #{r.rowIndex + 1}</p>
+                              <p className="text-sm font-bold text-primary">{t('Record #{n}', { n: r.rowIndex + 1 })}</p>
                             </div>
                             <Button
                               variant="outline"
@@ -178,7 +180,7 @@ export default function DashboardPage() {
                               className="gap-2 border-primary/20 text-primary hover:bg-primary/5"
                               onClick={() => handleViewRecord(r.id)}
                             >
-                              <Eye className="h-4 w-4" /> View
+                              <Eye className="h-4 w-4" /> {t('View')}
                             </Button>
                           </div>
                         ))}
@@ -197,13 +199,13 @@ export default function DashboardPage() {
       <Dialog open={!!viewingRecord || loadingRecord} onOpenChange={(open) => { if (!open) setViewingRecord(null); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Record Details</DialogTitle>
+            <DialogTitle>{t('Record details')}</DialogTitle>
             <DialogDescription>
-              {viewingRecord ? `Added ${new Date(viewingRecord.createdAt).toLocaleDateString()}` : 'Loading…'}
+              {viewingRecord ? t('Added {date}', { date: new Date(viewingRecord.createdAt).toLocaleDateString(locale) }) : t('Loading…')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 py-2">
-            {loadingRecord && !viewingRecord && <p className="text-sm text-muted-foreground">Loading…</p>}
+            {loadingRecord && !viewingRecord && <p className="text-sm text-muted-foreground">{t('Loading…')}</p>}
             {/* Index in the key because a CSV can repeat a column name */}
             {viewingRecord?.fields.map((f, i) => (
               <div key={`${i}-${f.column}`} className="flex justify-between gap-4 text-sm border-b pb-1">
@@ -212,7 +214,7 @@ export default function DashboardPage() {
               </div>
             ))}
             {viewingRecord && viewingRecord.fields.length === 0 && (
-              <p className="text-sm text-muted-foreground">This record has no fields.</p>
+              <p className="text-sm text-muted-foreground">{t('This record has no fields.')}</p>
             )}
           </div>
         </DialogContent>

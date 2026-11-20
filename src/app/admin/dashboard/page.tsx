@@ -21,6 +21,7 @@ import {
 import { ApiError } from '@/lib/api';
 import { getAdminDisplayCache, setAdminDisplayCache, clearAdminDisplayCache } from '@/lib/admin-session-cache';
 import { SiteHeader } from '@/components/site/SiteShell';
+import { useT } from '@/lib/i18n';
 import { AdminsSection, type CreatedInvite } from '@/components/admin/AdminsSection';
 import { BarcodeGenerator } from '@/components/admin/BarcodeGenerator';
 import { KitIdListTab } from '@/components/admin/KitIdListTab';
@@ -30,6 +31,7 @@ import { UploadDocumentsTab, type LastIngest } from '@/components/admin/UploadDo
 export default function AdminDashboardPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const { t, locale } = useT();
   const [admin, setAdmin] = useState<{ email: string; name: string } | null>(null);
   const [checked, setChecked] = useState(false);
   const [admins, setAdmins] = useState<AdminSummary[]>([]);
@@ -83,7 +85,7 @@ export default function AdminDashboardPage() {
   }, [router]);
 
   const handleLogout = async () => {
-    toast({ variant: 'success', title: 'Signed Out', description: 'Please log back in whenever you need admin access.' });
+    toast({ variant: 'success', title: 'Signed out', description: 'Please log back in whenever you need admin access.' });
     try {
       await adminLogout(); // clears the real session cookie server-side
     } catch {
@@ -101,11 +103,11 @@ export default function AdminDashboardPage() {
       setAdmin(session);
       setAdminDisplayCache(session);
       setEditingName(false);
-      toast({ variant: 'success', title: 'Name Updated', description: 'Please note — your display name has been updated.' });
+      toast({ variant: 'success', title: 'Name updated', description: 'Your display name has been updated.' });
       loadAdmins(); // refresh so the admin list reflects the new name too
     } catch (e) {
       const message = e instanceof ApiError ? e.message : "Please try again — we couldn't update your name.";
-      toast({ variant: 'destructive', title: 'Could Not Update Name', description: message });
+      toast({ variant: 'destructive', title: 'Could not update name', description: message });
     } finally {
       setSavingName(false);
     }
@@ -146,52 +148,52 @@ export default function AdminDashboardPage() {
         right={
           <>
             <span className="hidden sm:inline rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
-              {isSuperadmin ? 'Super admin' : 'Admin'}
+              {isSuperadmin ? t('Super admin') : t('Admin')}
             </span>
             <span className="hidden md:inline text-sm text-muted-foreground">{admin?.email}</span>
             <Button variant="outline" size="sm" onClick={handleLogout}>
-              <LogOut className="h-4 w-4 mr-2" /> Sign out
+              <LogOut className="h-4 w-4 mr-2" /> {t('Sign out')}
             </Button>
           </>
         }
       />
       {/* Phones: sections as tabs under the header */}
-      <div className="border-b bg-white lg:hidden">
+      <div className="border-b bg-card lg:hidden">
         <nav className="flex w-full gap-6 overflow-x-auto px-4 sm:px-6">
           <button type="button" className={navItemClass(section === 'overview')} onClick={() => setSection('overview')}>
-            <LayoutGrid className="h-4 w-4" /> Overview
+            <LayoutGrid className="h-4 w-4" /> {t('Overview')}
           </button>
           <button type="button" className={navItemClass(section === 'admins')} onClick={() => setSection('admins')}>
-            <Users className="h-4 w-4" /> Admins
+            <Users className="h-4 w-4" /> {t('Admins')}
           </button>
           <button type="button" className={navItemClass(section === 'kit')} onClick={() => setSection('kit')}>
-            <IdCard className="h-4 w-4" /> KIT IDs
+            <IdCard className="h-4 w-4" /> {t('KIT IDs')}
           </button>
         </nav>
       </div>
 
       <div className="flex-1 min-w-0 flex">
         {/* Laptops: light sidebar, same look as the rest of the site */}
-        <aside className="hidden lg:flex w-60 shrink-0 flex-col border-r bg-white px-3 py-6">
-          <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Manage</p>
+        <aside className="hidden lg:flex w-60 shrink-0 flex-col border-r bg-card px-3 py-6">
+          <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t('Manage')}</p>
           <nav className="flex flex-col gap-1">
             <button type="button" className={sideItemClass(section === 'overview')} onClick={() => setSection('overview')}>
-              <LayoutGrid className="h-4 w-4" /> Overview
+              <LayoutGrid className="h-4 w-4" /> {t('Overview')}
             </button>
             <button type="button" className={sideItemClass(section === 'admins')} onClick={() => setSection('admins')}>
-              <Users className="h-4 w-4" /> Admins
+              <Users className="h-4 w-4" /> {t('Admins')}
             </button>
             <button type="button" className={sideItemClass(section === 'kit')} onClick={() => setSection('kit')}>
-              <IdCard className="h-4 w-4" /> KIT IDs
+              <IdCard className="h-4 w-4" /> {t('KIT IDs')}
             </button>
           </nav>
         </aside>
-        <main className="flex-1 min-w-0 px-4 sm:px-8 py-8 max-w-5xl space-y-6">
+        <main id="main" className="flex-1 min-w-0 px-4 sm:px-8 py-8 max-w-5xl space-y-6">
           {(adminsFailed || membersFailed) && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                We couldn&apos;t load all the data on this page, so what&apos;s shown may be incomplete. Please refresh to try again.
+                {t("We couldn't load all the data on this page, so what's shown may be incomplete. Please refresh to try again.")}
               </AlertDescription>
             </Alert>
           )}
@@ -200,24 +202,24 @@ export default function AdminDashboardPage() {
             <>
               <div>
                 <div className="flex items-center gap-2">
-                  <h1 className="text-2xl font-semibold tracking-tight">Welcome, {admin?.name || admin?.email}</h1>
+                  <h1 className="text-2xl font-semibold tracking-tight">{t('Welcome, {name}', { name: admin?.name || admin?.email || '' })}</h1>
                   <Button
                     variant="ghost"
                     size="sm"
-                    aria-label="Edit your name"
+                    aria-label={t('Edit your name')}
                     onClick={() => { setEditingName(true); setNameInput(admin?.name || ''); }}
                   >
                     <Pencil className="h-4 w-4" />
                   </Button>
                 </div>
-                <p className="text-sm text-muted-foreground mt-1">Manage admins, KIT IDs and uploads.</p>
+                <p className="text-sm text-muted-foreground mt-1">{t('Manage admins, KIT IDs and uploads.')}</p>
                 {editingName && (
                   <div className="flex items-center gap-2 mt-2">
                     <Input className="w-56 h-9" value={nameInput} onChange={(e) => setNameInput(e.target.value)} />
                     <Button size="sm" onClick={handleSaveName} disabled={savingName}>
-                      {savingName ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
+                      {savingName ? <Loader2 className="h-4 w-4 animate-spin" /> : t('Save')}
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => setEditingName(false)}>Cancel</Button>
+                    <Button size="sm" variant="outline" onClick={() => setEditingName(false)}>{t('Cancel')}</Button>
                   </div>
                 )}
               </div>
@@ -225,34 +227,34 @@ export default function AdminDashboardPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Admins</CardTitle>
+                    <CardTitle className="text-sm font-medium text-muted-foreground">{t('Admins')}</CardTitle>
                     <Users className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
                     <div className="text-3xl font-semibold tracking-tight">{adminsFailed ? '—' : admins.length}</div>
-                    <CardDescription>With portal access</CardDescription>
+                    <CardDescription>{t('With portal access')}</CardDescription>
                   </CardContent>
                 </Card>
 
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">KIT IDs</CardTitle>
+                    <CardTitle className="text-sm font-medium text-muted-foreground">{t('KIT IDs')}</CardTitle>
                     <IdCard className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
                     <div className="text-3xl font-semibold tracking-tight">{membersFailed ? '—' : members.length}</div>
-                    <CardDescription>{membersFailed ? 'Not available' : `${members.filter((m) => m.registered).length} registered`}</CardDescription>
+                    <CardDescription>{membersFailed ? t('Not available') : t('{n} registered', { n: members.filter((m) => m.registered).length.toLocaleString(locale) })}</CardDescription>
                   </CardContent>
                 </Card>
 
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Last Upload</CardTitle>
+                    <CardTitle className="text-sm font-medium text-muted-foreground">{t('Last upload')}</CardTitle>
                     <FileText className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
                     <div className="text-3xl font-semibold tracking-tight">{lastIngest ? lastIngest.rowCount : '—'}</div>
-                    <CardDescription>{lastIngest ? `row(s) for ${lastIngest.kitId}` : 'No uploads yet this session'}</CardDescription>
+                    <CardDescription>{lastIngest ? t('row(s) for {kitId}', { kitId: lastIngest.kitId }) : t('No uploads yet this session')}</CardDescription>
                   </CardContent>
                 </Card>
               </div>
@@ -270,11 +272,11 @@ export default function AdminDashboardPage() {
 
           {section === 'kit' && (
             <Tabs value={kitTab} onValueChange={(v) => setKitTab(v as typeof kitTab)}>
-              <TabsList>
-                <TabsTrigger value="list">List</TabsTrigger>
-                <TabsTrigger value="provision">Provision</TabsTrigger>
-                <TabsTrigger value="barcodes">Barcodes</TabsTrigger>
-                <TabsTrigger value="upload">Upload Documents</TabsTrigger>
+              <TabsList className="h-auto flex-wrap justify-start">
+                <TabsTrigger value="list">{t('List')}</TabsTrigger>
+                <TabsTrigger value="provision">{t('Provision')}</TabsTrigger>
+                <TabsTrigger value="barcodes">{t('Barcodes')}</TabsTrigger>
+                <TabsTrigger value="upload">{t('Upload documents')}</TabsTrigger>
               </TabsList>
 
               <TabsContent value="list" className="space-y-4">

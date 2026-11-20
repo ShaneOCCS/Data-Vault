@@ -6,6 +6,11 @@
 
 import type { RecordDetail } from './member-api';
 import { bmiBand, fmtDate, type HealthSnapshot } from './health';
+import type { TFunc } from './i18n';
+
+/** Language for the exported file (defaults to English). */
+export type ExportLang = { t: TFunc; locale?: string };
+const EN: ExportLang = { t: (s) => s };
 
 function download(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -34,10 +39,10 @@ function csvCell(v: string): string {
   return /[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
 }
 
-export function exportCsv(kitId: string, records: RecordDetail[]) {
+export function exportCsv(kitId: string, records: RecordDetail[], { t }: ExportLang = EN) {
   const cols = allColumns(records);
   const lines = [
-    ['Uploaded', ...cols].map(csvCell).join(','),
+    [t('Uploaded'), ...cols].map(csvCell).join(','),
     ...records.map((r) => {
       const byCol = new Map(r.fields.map((f) => [f.column, f.value]));
       return [new Date(r.createdAt).toISOString(), ...cols.map((c) => byCol.get(c) ?? '')].map(csvCell).join(',');
@@ -51,8 +56,10 @@ export async function exportPdf(
   kitId: string,
   records: RecordDetail[],
   latest: HealthSnapshot | undefined,
-  chartImages: { title: string; dataUri: string; width: number; height: number }[] = []
+  chartImages: { title: string; dataUri: string; width: number; height: number }[] = [],
+  { t, locale }: ExportLang = EN
 ) {
+  const date = (iso: string) => fmtDate(iso, locale);
   // Loaded on click so the PDF library isn't in the page's first download.
   const { jsPDF } = await import('jspdf');
   const { default: autoTable } = await import('jspdf-autotable');
@@ -64,26 +71,26 @@ export async function exportPdf(
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(18);
-  doc.text('Data Vault — Your health summary', margin, y);
+  doc.text(`Data Vault — ${t('Your health summary')}`, margin, y);
   y += 20;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   doc.setTextColor(100);
-  doc.text(`KIT ID ${kitId}  ·  Exported ${fmtDate(new Date().toISOString())}`, margin, y);
+  doc.text(`${t('KIT ID')} ${kitId}  ·  ${t('Exported {date}', { date: date(new Date().toISOString()) })}`, margin, y);
   doc.setTextColor(0);
   y += 20;
 
   if (latest) {
     const rows: string[][] = [];
-    if (latest.bmi != null) rows.push(['BMI', `${latest.bmi.toFixed(1)} (${bmiBand(latest.bmi).label})`]);
-    if (latest.weightKg != null) rows.push(['Weight', `${latest.weightKg.toFixed(1)} kg`]);
-    if (latest.heightM != null) rows.push(['Height', `${latest.heightM.toFixed(2)} m`]);
-    if (latest.generalHealth) rows.push(['General health', latest.generalHealth]);
-    if (latest.hadHeartAttack != null) rows.push(['Heart attack history', latest.hadHeartAttack ? 'Yes' : 'No']);
-    rows.push(['From upload on', fmtDate(latest.date)]);
+    if (latest.bmi != null) rows.push([t('BMI'), `${latest.bmi.toFixed(1)} (${t(bmiBand(latest.bmi).label)})`]);
+    if (latest.weightKg != null) rows.push([t('Weight'), `${latest.weightKg.toFixed(1)} kg`]);
+    if (latest.heightM != null) rows.push([t('Height'), `${latest.heightM.toFixed(2)} m`]);
+    if (latest.generalHealth) rows.push([t('General health'), t(latest.generalHealth)]);
+    if (latest.hadHeartAttack != null) rows.push([t('Heart attack history'), latest.hadHeartAttack ? t('Yes') : t('No')]);
+    rows.push([t('From upload on'), date(latest.date)]);
     autoTable(doc, {
       startY: y,
-      head: [['Latest results', '']],
+      head: [[t('Latest results'), '']],
       body: rows,
       theme: 'grid',
       headStyles: { fillColor: [46, 123, 207] },
@@ -112,10 +119,10 @@ export async function exportPdf(
   const cols = allColumns(records);
   autoTable(doc, {
     startY: y,
-    head: [['Uploaded', ...cols]],
+    head: [[t('Uploaded'), ...cols]],
     body: records.map((r) => {
       const byCol = new Map(r.fields.map((f) => [f.column, f.value]));
-      return [fmtDate(r.createdAt), ...cols.map((c) => tidy(byCol.get(c) ?? ''))];
+      return [date(r.createdAt), ...cols.map((c) => tidy(byCol.get(c) ?? ''))];
     }),
     theme: 'striped',
     headStyles: { fillColor: [46, 123, 207] },
@@ -127,7 +134,7 @@ export async function exportPdf(
   doc.setFontSize(8);
   doc.setTextColor(120);
   doc.text(
-    'This summary is for your information. Talk to your clinic about what your results mean for you.',
+    t('This summary is for your information. Talk to your clinic about what your results mean for you.'),
     margin,
     doc.internal.pageSize.getHeight() - 20
   );

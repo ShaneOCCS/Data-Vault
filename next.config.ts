@@ -32,6 +32,8 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Hide the dev-only Next.js "N" badge (it never shows on the live site anyway).
+  devIndicators: false,
   async headers() {
     return [{source: '/:path*', headers: securityHeaders}];
   },

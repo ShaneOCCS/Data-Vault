@@ -11,6 +11,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useT } from '@/lib/i18n';
 
 interface BarcodeScannerDialogProps {
   open: boolean;
@@ -49,6 +50,7 @@ function describeCameraError(error: unknown): string {
 // Camera access still requires a secure context (HTTPS or localhost) on
 // every platform, iOS included — that's the browser's rule, not this app's.
 export function BarcodeScannerDialog({ open, onOpenChange, onScan }: BarcodeScannerDialogProps) {
+  const { t } = useT();
   const videoRef = useRef<HTMLVideoElement>(null);
   const readerRef = useRef<BrowserMultiFormatReader | null>(null);
   const controlsRef = useRef<import('@zxing/browser').IScannerControls | null>(null);
@@ -208,10 +210,10 @@ export function BarcodeScannerDialog({ open, onOpenChange, onScan }: BarcodeScan
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <ScanLine className="h-5 w-5" /> Scan KIT ID Barcode
+            <ScanLine className="h-5 w-5" /> {t('Scan KIT ID barcode')}
           </DialogTitle>
           <DialogDescription>
-            Please point the camera at a KIT ID barcode.
+            {t('Please point the camera at a KIT ID barcode.')}
           </DialogDescription>
         </DialogHeader>
 
@@ -219,14 +221,14 @@ export function BarcodeScannerDialog({ open, onOpenChange, onScan }: BarcodeScan
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              Camera scanning needs a secure connection (HTTPS), but this page is loaded over plain HTTP at {typeof window !== 'undefined' ? window.location.host : 'this address'}.
-              Please open the app over HTTPS, or via <code className="font-mono">localhost</code>, or just type the KIT ID in manually for now.
+              {t('Camera scanning needs a secure connection (HTTPS), but this page is loaded over plain HTTP at {host}.', { host: typeof window !== 'undefined' ? window.location.host : '…' })}{' '}
+              {t('Please open the app over HTTPS or via localhost, or type the KIT ID in manually for now.')}
             </AlertDescription>
           </Alert>
         ) : error ? (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription>{t(error)}</AlertDescription>
           </Alert>
         ) : (
           <div className="space-y-2">
@@ -241,7 +243,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onScan }: BarcodeScan
                   type="button"
                   onClick={toggleTorch}
                   className={`absolute bottom-3 right-3 rounded-full p-2 ${torchOn ? 'bg-yellow-400 text-black' : 'bg-black/60 text-white'}`}
-                  aria-label={torchOn ? 'Turn off flashlight' : 'Turn on flashlight'}
+                  aria-label={torchOn ? t('Turn off flashlight') : t('Turn on flashlight')}
                 >
                   <Flashlight className="h-4 w-4" />
                 </button>
@@ -249,7 +251,7 @@ export function BarcodeScannerDialog({ open, onOpenChange, onScan }: BarcodeScan
             </div>
             {slowScan && !starting && (
               <p className="text-xs text-muted-foreground text-center">
-                Still looking — try holding it a bit closer, steadier, and out of glare. Fills most of the frame works best.
+                {t('Still looking — try holding it a bit closer, steadier, and out of glare. It works best when the barcode fills most of the frame.')}
               </p>
             )}
           </div>

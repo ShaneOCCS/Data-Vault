@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { MemberSummary } from '@/lib/admin-api';
+import { useT } from '@/lib/i18n';
 import { ListPager, usePagedList } from '@/components/admin/ListPager';
 
 interface BarcodeGeneratorProps {
@@ -48,6 +49,7 @@ function BarcodeSvg({ value, forwardedRef }: { value: string; forwardedRef?: Rea
 }
 
 export function BarcodeGenerator({ members }: BarcodeGeneratorProps) {
+  const { t } = useT();
   // --- Single barcode ---
   const [singleKitId, setSingleKitId] = useState('');
   const singleSvgRef = useRef<SVGSVGElement>(null);
@@ -117,19 +119,19 @@ export function BarcodeGenerator({ members }: BarcodeGeneratorProps) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <ScanBarcode className="h-5 w-5" /> Generate KIT ID Barcodes
+          <ScanBarcode className="h-5 w-5" /> {t('Generate KIT ID barcodes')}
         </CardTitle>
-        <CardDescription>Please generate a printable barcode for one KIT ID, or a whole batch at once.</CardDescription>
+        <CardDescription>{t('Please generate a printable barcode for one KIT ID, or a whole batch at once.')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-8">
         {/* Single generation */}
         <div className="space-y-3">
-          <Label className="text-sm font-semibold">Single KIT ID</Label>
+          <Label className="text-sm font-semibold">{t('Single KIT ID')}</Label>
           <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
             <div className="space-y-1.5 flex-1">
               <Select value={singleKitId} onValueChange={setSingleKitId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a KIT ID" />
+                  <SelectValue placeholder={t('Select a KIT ID')} />
                 </SelectTrigger>
                 <SelectContent>
                   {members.map((m) => (
@@ -141,26 +143,26 @@ export function BarcodeGenerator({ members }: BarcodeGeneratorProps) {
               </Select>
             </div>
             <Button variant="outline" onClick={handleDownloadSingle} disabled={!singleKitId}>
-              <Download className="h-4 w-4 mr-2" /> Download PNG
+              <Download className="h-4 w-4 mr-2" /> {t('Download PNG')}
             </Button>
             <Button variant="outline" onClick={handlePrintSingle} disabled={!singleKitId}>
-              <Printer className="h-4 w-4 mr-2" /> Print
+              <Printer className="h-4 w-4 mr-2" /> {t('Print')}
             </Button>
           </div>
 
           {singleKitId && (
-            <div className="border rounded-lg p-4 bg-white flex justify-center">
+            <div className="border rounded-lg p-4 bg-card flex justify-center">
               <BarcodeSvg value={singleKitId} forwardedRef={singleSvgRef} />
             </div>
           )}
         </div>
 
         <div className="border-t pt-6 space-y-3">
-          <Label className="text-sm font-semibold">Batch Generate</Label>
+          <Label className="text-sm font-semibold">{t('Batch generate')}</Label>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search by KIT ID..."
+              placeholder={t('Search by KIT ID...')}
               value={batchSearch}
               onChange={(e) => setBatchSearch(e.target.value)}
               className="pl-9 pr-9"
@@ -170,7 +172,7 @@ export function BarcodeGenerator({ members }: BarcodeGeneratorProps) {
                 type="button"
                 onClick={() => setBatchSearch('')}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                aria-label="Clear search"
+                aria-label={t('Clear search')}
               >
                 <X className="h-4 w-4" />
               </button>
@@ -179,10 +181,10 @@ export function BarcodeGenerator({ members }: BarcodeGeneratorProps) {
 
           <div className="border rounded-lg divide-y">
             {members.length === 0 && (
-              <div className="p-6 text-center text-sm text-muted-foreground">No pending KIT IDs.</div>
+              <div className="p-6 text-center text-sm text-muted-foreground">{t('No pending KIT IDs')}.</div>
             )}
             {members.length > 0 && batchFilteredMembers.length === 0 && (
-              <div className="p-6 text-center text-sm text-muted-foreground">No KIT IDs match &quot;{batchSearch}&quot;.</div>
+              <div className="p-6 text-center text-sm text-muted-foreground">{t('No KIT IDs match "{q}".', { q: batchSearch })}</div>
             )}
             {batchFilteredMembers.length > 0 && (
               <button
@@ -195,7 +197,7 @@ export function BarcodeGenerator({ members }: BarcodeGeneratorProps) {
                 ) : (
                   <Square className="h-4 w-4 text-muted-foreground" />
                 )}
-                {allFilteredSelected ? 'Deselect all' : 'Select all'}
+                {allFilteredSelected ? t('Deselect all') : t('Select all')}
                 {batchSearch && ' (filtered)'}
               </button>
             )}
@@ -217,7 +219,7 @@ export function BarcodeGenerator({ members }: BarcodeGeneratorProps) {
                     <div>
                       {/* CHANGED: real members have no name — show kitId + registered status instead */}
                       <p className="font-medium text-sm">{m.kitId}</p>
-                      <p className="text-xs text-muted-foreground">{m.registered ? 'Registered' : 'Pending Setup'}</p>
+                      <p className="text-xs text-muted-foreground">{m.registered ? t('Registered') : t('Pending setup')}</p>
                     </div>
                   </div>
                 </button>
@@ -231,7 +233,7 @@ export function BarcodeGenerator({ members }: BarcodeGeneratorProps) {
               {selectedKitIds.size} selected
             </p>
             <Button onClick={handlePrintBatch} disabled={selectedKitIds.size === 0}>
-              <Printer className="h-4 w-4 mr-2" /> Print / Save Batch as PDF
+              <Printer className="h-4 w-4 mr-2" /> {t('Print / save batch as PDF')}
             </Button>
           </div>
         </div>

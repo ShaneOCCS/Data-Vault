@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { provisionMembers, splitProvisionedKeys, type ProvisionedMember } from '@/lib/admin-api';
 import { ApiError } from '@/lib/api';
 import { ListPager, usePagedList } from '@/components/admin/ListPager';
+import { useT } from '@/lib/i18n';
 
 // Each KIT ID costs the server about half a second of password hashing. If a
 // batch outlasts the server's 30s timeout, the KIT IDs are saved but their
@@ -25,6 +26,7 @@ interface ProvisionTabProps {
 
 export function ProvisionTab({ provisioned, onProvisioned }: ProvisionTabProps) {
   const { toast } = useToast();
+  const { t } = useT();
   const [count, setCount] = useState(1);
   const [provisioning, setProvisioning] = useState(false);
   const [error, setError] = useState('');
@@ -32,7 +34,7 @@ export function ProvisionTab({ provisioned, onProvisioned }: ProvisionTabProps) 
 
   const handleProvision = async () => {
     if (!Number.isInteger(count) || count < 1 || count > MAX_BATCH_SIZE) {
-      setError(`Please enter a whole number from 1 to ${MAX_BATCH_SIZE}. For more, generate another batch afterwards.`);
+      setError(t('Please enter a whole number from 1 to {max}. For more, generate another batch afterwards.', { max: MAX_BATCH_SIZE }));
       return;
     }
     setProvisioning(true);
@@ -40,7 +42,7 @@ export function ProvisionTab({ provisioned, onProvisioned }: ProvisionTabProps) 
     try {
       const result = await provisionMembers(count);
       onProvisioned(result.members);
-      toast({ variant: 'success', title: 'KIT IDs Generated', description: `Please note — ${result.members.length} new KIT ID(s) created.` });
+      toast({ variant: 'success', title: 'KIT IDs generated', description: t('{n} new KIT ID(s) created.', { n: result.members.length }) });
     } catch (e) {
       const message = e instanceof ApiError ? e.message : "Please try again — we couldn't generate new KIT IDs.";
       setError(message);
@@ -53,7 +55,7 @@ export function ProvisionTab({ provisioned, onProvisioned }: ProvisionTabProps) 
     const { signupKey, recoveryKeys } = splitProvisionedKeys(member);
     const text = `KIT ID: ${member.kitId}\nSignup key: ${signupKey}\nRecovery keys:\n${recoveryKeys.join('\n')}`;
     navigator.clipboard?.writeText(text);
-    toast({ variant: 'success', title: 'Copied', description: `Please paste this somewhere safe — ${member.kitId}'s keys won't be shown again.` });
+    toast({ variant: 'success', title: 'Copied', description: t("Please paste this somewhere safe — {kitId}'s keys won't be shown again.", { kitId: member.kitId }) });
   };
 
   // The hand-off file for the lab to print and distribute KIT IDs to clients.
@@ -81,21 +83,21 @@ export function ProvisionTab({ provisioned, onProvisioned }: ProvisionTabProps) 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Provision New KIT IDs</CardTitle>
+        <CardTitle>{t('Provision new KIT IDs')}</CardTitle>
         <CardDescription>
-          Generate brand-new KIT IDs, up to {MAX_BATCH_SIZE} at a time. Each one gets a signup key, which the member enters as their Registration Code, and recovery keys for a lost device. Keys are shown only here and are gone once you reload or leave this page, so copy or download them first.
+          {t('Generate brand-new KIT IDs, up to {max} at a time. Each one gets a setup code, which the member enters when they set up their account, and recovery keys for a lost device. Keys are shown only here and are gone once you reload or leave this page, so copy or download them first.', { max: MAX_BATCH_SIZE })}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {error && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription>{t(error)}</AlertDescription>
           </Alert>
         )}
         <div className="flex items-end gap-3">
           <div className="space-y-1.5">
-            <Label htmlFor="provision-count">How many?</Label>
+            <Label htmlFor="provision-count">{t('How many?')}</Label>
             <Input
               id="provision-count"
               type="number"
@@ -107,7 +109,7 @@ export function ProvisionTab({ provisioned, onProvisioned }: ProvisionTabProps) 
             />
           </div>
           <Button onClick={handleProvision} disabled={provisioning} className="h-10">
-            {provisioning ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Plus className="h-4 w-4 mr-2" /> Generate</>}
+            {provisioning ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Plus className="h-4 w-4 mr-2" /> {t('Generate')}</>}
           </Button>
         </div>
 
@@ -115,7 +117,7 @@ export function ProvisionTab({ provisioned, onProvisioned }: ProvisionTabProps) 
           <div className="space-y-3">
             <div className="flex justify-end">
               <Button variant="outline" size="sm" onClick={handleDownload}>
-                <Download className="h-4 w-4 mr-2" /> Download CSV
+                <Download className="h-4 w-4 mr-2" /> {t('Download CSV')}
               </Button>
             </div>
             <div className="border rounded-lg divide-y">
@@ -126,16 +128,16 @@ export function ProvisionTab({ provisioned, onProvisioned }: ProvisionTabProps) 
                     <div className="flex items-center justify-between">
                       <p className="font-medium text-sm">{m.kitId}</p>
                       <Button variant="ghost" size="sm" onClick={() => handleCopy(m)}>
-                        <Copy className="h-4 w-4 mr-2" /> Copy
+                        <Copy className="h-4 w-4 mr-2" /> {t('Copy')}
                       </Button>
                     </div>
                     <div className="space-y-1.5">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-xs font-medium text-muted-foreground w-24">Signup key</span>
+                        <span className="text-xs font-medium text-muted-foreground w-24">{t('Setup code')}</span>
                         <code className="text-xs bg-accent/10 px-2 py-1 rounded">{signupKey}</code>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-xs font-medium text-muted-foreground w-24">Recovery keys</span>
+                        <span className="text-xs font-medium text-muted-foreground w-24">{t('Recovery keys')}</span>
                         {recoveryKeys.map((key) => (
                           <code key={key} className="text-xs bg-muted px-2 py-1 rounded">{key}</code>
                         ))}

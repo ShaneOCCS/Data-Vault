@@ -27,11 +27,13 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { isRateLimited, RATE_LIMIT_MESSAGE } from '@/lib/api';
 import Link from 'next/link';
+import { useT } from '@/lib/i18n';
 import QRCode from 'qrcode'; // NEW: renders the QR entirely in the browser from the server's otpauthUrl — the secret never gets sent to a third-party service like the old api.qrserver.com call did
 import { onboardBegin, onboardComplete } from '@/lib/member-api'; // NEW: real backend calls
 
 export function RegistrationFlow() {
   const router = useRouter();
+  const { t } = useT();
   const searchParams = useSearchParams();
 
   const [step, setStep] = useState(1);
@@ -110,7 +112,7 @@ export function RegistrationFlow() {
   const errorAlert = error ? (
     <Alert variant="destructive">
       <AlertCircle className="h-4 w-4" />
-      <AlertDescription>{error}</AlertDescription>
+      <AlertDescription>{t(error)}</AlertDescription>
     </Alert>
   ) : null;
 
@@ -123,22 +125,22 @@ export function RegistrationFlow() {
           description="Enter the KIT ID and setup code from the card that came with your kit."
           footer={
             <Button onClick={handleBegin} disabled={loading || !kitId || !signupKey} className="w-full h-11 font-semibold">
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Continue <ArrowRight className="ml-2 h-4 w-4" /></>}
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <>{t('Continue')} <ArrowRight className="ml-2 h-4 w-4" /></>}
             </Button>
           }
         >
           <div className="space-y-2">
-            <Label htmlFor="kitId">KIT ID</Label>
+            <Label htmlFor="kitId">{t('KIT ID')}</Label>
             <Input
               id="kitId"
-              placeholder="e.g. QS9KAH6"
+              placeholder={t('e.g. {example}', { example: 'QS9KAH6' })}
               className="h-11 font-mono tracking-wider"
               value={kitId}
               onChange={(e) => setKitId(e.target.value.toUpperCase())}
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="signupKey">Setup code</Label>
+            <Label htmlFor="signupKey">{t('Setup code')}</Label>
             <Input
               id="signupKey"
               placeholder="xxxxx-xxxxx-xxxxx-xxxxx"
@@ -151,7 +153,7 @@ export function RegistrationFlow() {
           {errorAlert}
         </AuthCard>
         <AuthNote>
-          Already set up? <Link href="/login" className="font-medium text-primary hover:underline">Sign in</Link>
+          {t('Already set up?')} <Link href="/login" className="font-medium text-primary hover:underline">{t('Sign in')}</Link>
         </AuthNote>
       </>
     );
@@ -166,7 +168,7 @@ export function RegistrationFlow() {
       backLabel="Back"
       footer={
         <Button onClick={handleComplete} disabled={loading || code.length !== 6} className="w-full h-11 font-semibold">
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Finish setup'}
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : t('Finish setup')}
         </Button>
       }
     >
@@ -174,25 +176,25 @@ export function RegistrationFlow() {
         <div className="rounded-xl border p-3">
           {qrDataUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={qrDataUrl} alt="QR code for your authenticator app" className="h-44 w-44" />
+            <img src={qrDataUrl} alt={t('QR code for your authenticator app')} className="h-44 w-44" />
           ) : (
-            <div className="flex h-44 w-44 items-center justify-center text-xs text-muted-foreground">Generating QR…</div>
+            <div className="flex h-44 w-44 items-center justify-center text-xs text-muted-foreground">{t('Generating QR…')}</div>
           )}
         </div>
       </div>
       {manualSecret && (
         <div className="space-y-2">
-          <p className="text-xs text-muted-foreground">Can&apos;t scan? Type this key into the app instead:</p>
+          <p className="text-xs text-muted-foreground">{t("Can't scan? Type this key into the app instead:")}</p>
           <div className="flex items-center justify-between gap-2 rounded-lg border bg-muted/40 px-3 py-2">
             <code className="font-mono text-sm font-semibold break-all">{manualSecret}</code>
-            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => copyToClipboard(manualSecret)} aria-label="Copy key">
-              {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => copyToClipboard(manualSecret)} aria-label={t('Copy key')}>
+              {copied ? <Check className="h-4 w-4 text-status-good-ink" /> : <Copy className="h-4 w-4" />}
             </Button>
           </div>
         </div>
       )}
       <div className="space-y-2">
-        <Label htmlFor="code">6-digit code</Label>
+        <Label htmlFor="code">{t('6-digit code')}</Label>
         <Input
           id="code"
           inputMode="numeric"

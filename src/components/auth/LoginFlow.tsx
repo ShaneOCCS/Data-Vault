@@ -38,6 +38,7 @@ import Link from 'next/link';
 import QRCode from 'qrcode'; // NEW: renders the QR client-side from the server's otpauthUrl, same approach as RegistrationFlow.tsx
 import { memberLogin, memberRecovery, onboardComplete } from '@/lib/member-api'; // NEW: real backend calls
 import { isRateLimited, RATE_LIMIT_MESSAGE } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 
 // LAYOUT (vishva-charts): which screen shows is driven by the URL, so the
 // page's side panel can match it: /login = sign in, /login?recover=1 =
@@ -45,6 +46,7 @@ import { isRateLimited, RATE_LIMIT_MESSAGE } from '@/lib/api';
 // successful recovery is local state, since it only exists mid-flow.
 export function LoginFlow() {
   const router = useRouter();
+  const { t } = useT();
   const searchParams = useSearchParams();
   const recoverMode = searchParams.get('recover') === '1';
   const [qrStage, setQrStage] = useState(false);
@@ -140,7 +142,7 @@ export function LoginFlow() {
   const errorAlert = error ? (
     <Alert variant="destructive">
       <AlertCircle className="h-4 w-4" />
-      <AlertDescription>{error}</AlertDescription>
+      <AlertDescription>{t(error)}</AlertDescription>
     </Alert>
   ) : null;
 
@@ -148,15 +150,14 @@ export function LoginFlow() {
     <AlertDialog open={showLostAccessDialog} onOpenChange={setShowLostAccessDialog}>
       <AlertDialogContent className="rounded-2xl">
         <AlertDialogHeader>
-          <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-amber-50">
-            <LifeBuoy className="h-6 w-6 text-amber-600" />
+          <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-status-warn-soft">
+            <LifeBuoy className="h-6 w-6 text-status-warn-ink" />
           </div>
           <AlertDialogTitle className="text-center text-lg font-semibold">
-            Your old authenticator code will stop working
+            {t("Your old phone won't work for sign-in anymore")}
           </AlertDialogTitle>
           <AlertDialogDescription className="text-center">
-            Using a recovery key resets your sign-in. After this you&apos;ll scan a new QR code to
-            connect your authenticator app again.
+            {t("Using a recovery key resets your sign-in. Next, you'll scan a new QR code with your authenticator app. The key you use can't be used again.")}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="flex-col sm:flex-col gap-2">
@@ -168,10 +169,10 @@ export function LoginFlow() {
               setStep('recoveryKey');
             }}
           >
-            I understand, continue
+            {t('I understand, continue')}
           </Button>
           <Button variant="outline" className="w-full h-11" onClick={() => setShowLostAccessDialog(false)}>
-            Cancel
+            {t('Cancel')}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -187,23 +188,23 @@ export function LoginFlow() {
           footer={
             <>
               <Button onClick={handleLogin} disabled={loading || !kitId || code.length !== 6} className="w-full h-11 font-semibold">
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Sign in <ArrowRight className="ml-2 h-4 w-4" /></>}
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <>{t('Sign in')} <ArrowRight className="ml-2 h-4 w-4" /></>}
               </Button>
               <button
                 type="button"
                 className="w-full text-sm text-muted-foreground hover:text-primary transition-colors"
                 onClick={() => setShowLostAccessDialog(true)}
               >
-                Lost your phone? Use a recovery key
+                {t('Lost your phone? Use a recovery key')}
               </button>
             </>
           }
         >
           <div className="space-y-2">
-            <Label htmlFor="kitId">KIT ID</Label>
+            <Label htmlFor="kitId">{t('KIT ID')}</Label>
             <Input
               id="kitId"
-              placeholder="e.g. QS9KAH6"
+              placeholder={t('e.g. {example}', { example: 'QS9KAH6' })}
               autoComplete="username"
               className="h-11 font-mono tracking-wider"
               value={kitId}
@@ -211,7 +212,7 @@ export function LoginFlow() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="otp">6-digit code</Label>
+            <Label htmlFor="otp">{t('6-digit code')}</Label>
             <Input
               id="otp"
               inputMode="numeric"
@@ -227,7 +228,7 @@ export function LoginFlow() {
           {errorAlert}
         </AuthCard>
         <AuthNote>
-          New here? <Link href="/register" className="font-medium text-primary hover:underline">Set up your account</Link>
+          {t('New here?')} <Link href="/register" className="font-medium text-primary hover:underline">{t('Set up your account')}</Link>
         </AuthNote>
         {lostAccessDialog}
       </>
@@ -241,25 +242,25 @@ export function LoginFlow() {
           onBack={() => { setError(''); setStep('login'); }}
           backLabel="Back to sign in"
           title="Recover access"
-          description="Enter your KIT ID and one of your recovery keys. Your old authenticator code stops working after this, and you'll connect your phone again."
+          description="Enter your KIT ID and one of the recovery keys from your kit card. After this, your old phone can't be used to sign in, and you'll connect your new phone."
           footer={
             <Button disabled={loading || !kitId || !recoveryKey} onClick={handleRecoveryBegin} className="w-full h-11 font-semibold">
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Continue <ArrowRight className="ml-2 h-4 w-4" /></>}
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <>{t('Continue')} <ArrowRight className="ml-2 h-4 w-4" /></>}
             </Button>
           }
         >
           <div className="space-y-2">
-            <Label htmlFor="kitIdRecovery">KIT ID</Label>
+            <Label htmlFor="kitIdRecovery">{t('KIT ID')}</Label>
             <Input
               id="kitIdRecovery"
-              placeholder="e.g. QS9KAH6"
+              placeholder={t('e.g. {example}', { example: 'QS9KAH6' })}
               className="h-11 font-mono tracking-wider"
               value={kitId}
               onChange={(e) => setKitId(e.target.value.toUpperCase())}
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="recovery">Recovery key</Label>
+            <Label htmlFor="recovery">{t('Recovery key')}</Label>
             <Input
               id="recovery"
               placeholder="xxxxx-xxxxx-xxxxx-xxxxx"
@@ -271,7 +272,7 @@ export function LoginFlow() {
           {errorAlert}
         </AuthCard>
         <AuthNote>
-          Have your phone? <Link href="/login" className="font-medium text-primary hover:underline">Sign in normally</Link>
+          {t('Have your phone?')} <Link href="/login" className="font-medium text-primary hover:underline">{t('Sign in normally')}</Link>
         </AuthNote>
       </>
     );
@@ -282,10 +283,10 @@ export function LoginFlow() {
     <AuthCard
       step="New phone"
       title="Connect your authenticator app"
-      description="Scan this code with Google Authenticator or Microsoft Authenticator, then enter the 6-digit code it shows. Keep this page open until you finish: your recovery key is already used."
+      description="Scan this code with Google Authenticator or Microsoft Authenticator, then enter the 6-digit code it shows. Don't close this page until you're done: the recovery key you entered is now used up."
       footer={
         <Button onClick={handleRecoveryComplete} disabled={loading || code.length !== 6} className="w-full h-11 font-semibold">
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Verify and sign in'}
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : t('Verify and sign in')}
         </Button>
       }
     >
@@ -293,25 +294,25 @@ export function LoginFlow() {
         <div className="rounded-xl border p-3">
           {qrDataUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={qrDataUrl} alt="QR code for your authenticator app" className="h-44 w-44" />
+            <img src={qrDataUrl} alt={t('QR code for your authenticator app')} className="h-44 w-44" />
           ) : (
-            <div className="flex h-44 w-44 items-center justify-center text-xs text-muted-foreground">Generating QR…</div>
+            <div className="flex h-44 w-44 items-center justify-center text-xs text-muted-foreground">{t('Generating QR…')}</div>
           )}
         </div>
       </div>
       {manualSecret && (
         <div className="space-y-2">
-          <p className="text-xs text-muted-foreground">Can&apos;t scan? Type this key into the app instead:</p>
+          <p className="text-xs text-muted-foreground">{t("Can't scan? Type this key into the app instead:")}</p>
           <div className="flex items-center justify-between gap-2 rounded-lg border bg-muted/40 px-3 py-2">
             <code className="font-mono text-sm font-semibold break-all">{manualSecret}</code>
-            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => copyToClipboard(manualSecret)} aria-label="Copy key">
-              {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => copyToClipboard(manualSecret)} aria-label={t('Copy key')}>
+              {copied ? <Check className="h-4 w-4 text-status-good-ink" /> : <Copy className="h-4 w-4" />}
             </Button>
           </div>
         </div>
       )}
       <div className="space-y-2">
-        <Label htmlFor="recoveryOtp">6-digit code</Label>
+        <Label htmlFor="recoveryOtp">{t('6-digit code')}</Label>
         <Input
           id="recoveryOtp"
           inputMode="numeric"

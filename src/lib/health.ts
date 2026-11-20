@@ -73,5 +73,5 @@ export function bmiBand(bmi: number): BmiBand {
   return BMI_BANDS.find((b) => bmi >= b.from && bmi < b.to) ?? BMI_BANDS[BMI_BANDS.length - 1];
 }
 
-export const fmtDate = (iso: string) =>
-  new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+export const fmtDate = (iso: string, locale?: string) =>
+  new Date(iso).toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' });

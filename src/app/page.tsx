@@ -1,7 +1,10 @@
+'use client';
+
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ChevronRight, LifeBuoy } from 'lucide-react';
 import { SiteHeader, SiteFooter } from '@/components/site/SiteShell';
+import { useT } from '@/lib/i18n';
 
 const steps = [
   {
@@ -19,40 +22,41 @@ const steps = [
 ];
 
 export default function Home() {
+  const { t } = useT();
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <SiteHeader
         right={
           <Button asChild size="sm">
-            <Link href="/login">Sign in</Link>
+            <Link href="/login">{t('Sign in')}</Link>
           </Button>
         }
       />
 
-      <main className="flex-1 flex flex-col">
+      <main id="main" className="flex-1 flex flex-col">
         <section className="flex-1 w-full mx-auto px-6 py-16 md:py-24 grid gap-12 md:grid-cols-2 md:items-center content-center max-w-6xl">
           <div className="space-y-6">
             <h1 className="text-4xl md:text-5xl font-headline font-bold text-foreground tracking-tight leading-tight">
-              Your health records, in one private place
+              {t('Your health records, in one private place')}
             </h1>
             <p className="text-lg text-muted-foreground max-w-md">
-              Sign in with your KIT ID and a code from your phone to see the results linked to your kit.
+              {t('Sign in with your KIT ID and a code from your phone to see the results linked to your kit.')}
             </p>
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
               <Button size="lg" asChild className="font-semibold">
                 <Link href="/login">
-                  Sign in <ChevronRight className="ml-1 h-4 w-4" />
+                  {t('Sign in')} <ChevronRight className="ml-1 h-4 w-4" />
                 </Link>
               </Button>
               <Button size="lg" variant="outline" asChild className="font-semibold">
-                <Link href="/register">First time? Set up your account</Link>
+                <Link href="/register">{t('First time? Set up your account')}</Link>
               </Button>
             </div>
           </div>
 
-          <div className="rounded-2xl border bg-white p-6 md:p-8 shadow-sm">
+          <div className="rounded-2xl border bg-card p-6 md:p-8 shadow-sm">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-6">
-              How it works
+              {t('How it works')}
             </h2>
             <ol className="space-y-6">
               {steps.map((step, i) => (
@@ -61,8 +65,8 @@ export default function Home() {
                     {i + 1}
                   </span>
                   <div>
-                    <p className="font-semibold text-foreground">{step.title}</p>
-                    <p className="text-sm text-muted-foreground mt-1">{step.body}</p>
+                    <p className="font-semibold text-foreground">{t(step.title)}</p>
+                    <p className="text-sm text-muted-foreground mt-1">{t(step.body)}</p>
                   </div>
                 </li>
               ))}
@@ -70,16 +74,16 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="border-t bg-white">
+        <section className="border-t bg-card">
           <div className="container mx-auto px-6 py-8 max-w-6xl flex gap-4 items-start">
             <LifeBuoy className="h-5 w-5 text-primary shrink-0 mt-0.5" />
             <div className="text-sm">
-              <p className="font-semibold text-foreground">Lost your phone or got a new one?</p>
+              <p className="font-semibold text-foreground">{t('Lost your phone or got a new one?')}</p>
               <p className="text-muted-foreground mt-1">
-                Use one of the recovery keys from your kit card to connect your new phone. Each key works once.
+                {t('Use a recovery key to get back in. Recovery keys are the backup codes printed on your kit card, and each one works only once.')}
               </p>
               <Link href="/login?recover=1" className="inline-flex items-center gap-1 mt-2 font-semibold text-primary hover:underline">
-                Recover access <ChevronRight className="h-4 w-4" />
+                {t('Recover access')} <ChevronRight className="h-4 w-4" />
               </Link>
             </div>
           </div>
