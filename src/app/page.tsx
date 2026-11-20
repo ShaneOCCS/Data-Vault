@@ -33,8 +33,8 @@ export default function Home() {
         }
       />
 
-      <main id="main" className="flex-1 flex flex-col">
-        <section className="flex-1 w-full mx-auto px-6 py-16 md:py-24 grid gap-12 md:grid-cols-2 md:items-center content-center max-w-6xl">
+      <main id="main" className="flex-1 flex flex-col bg-panel bg-[radial-gradient(ellipse_at_top_right,hsl(var(--primary)/0.12),transparent_55%)]">
+        <section className="flex-1 w-full mx-auto px-6 py-16 md:py-24 grid gap-12 md:grid-cols-2 md:items-center content-center max-w-7xl">
           <div className="space-y-6">
             <h1 className="text-4xl md:text-5xl font-headline font-bold text-foreground tracking-tight leading-tight">
               {t('Your health records, in one private place')}
@@ -75,7 +75,7 @@ export default function Home() {
         </section>
 
         <section className="border-t bg-card">
-          <div className="container mx-auto px-6 py-8 max-w-6xl flex gap-4 items-start">
+          <div className="container mx-auto px-6 py-8 max-w-7xl flex gap-4 items-start">
             <LifeBuoy className="h-5 w-5 text-primary shrink-0 mt-0.5" />
             <div className="text-sm">
               <p className="font-semibold text-foreground">{t('Lost your phone or got a new one?')}</p>

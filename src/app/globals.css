@@ -21,7 +21,8 @@
     --muted-foreground: 215 19% 42%;
     --accent: 190 77% 57%;
     --accent-foreground: 222 47% 11%;
-    --destructive: 0 84% 60%;
+    /* Error red: dark enough for 4.5:1 text on white and on its own pale tint. */
+    --destructive: 0 72% 44%;
     --destructive-foreground: 210 40% 98%;
     --border: 214.3 31.8% 91.4%;
     /* Input and outline-button borders: at least 3:1 against the page (WCAG 1.4.11). */
@@ -76,8 +77,8 @@
     --muted-foreground: 215 20% 70%;
     --accent: 190 70% 50%;
     --accent-foreground: 222 47% 11%;
-    --destructive: 0 72% 55%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 85% 66%;
+    --destructive-foreground: 222 47% 11%;
     --border: 222 20% 24%;
     --input: 218 15% 45%;
     --ring: 212 80% 62%;

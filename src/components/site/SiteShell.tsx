@@ -41,7 +41,7 @@ export function SiteHeader({
   return (
     <header className="border-b bg-card">
       <SkipLink />
-      <div className={cn('mx-auto w-full px-4 sm:px-6 h-16 flex items-center justify-between gap-4', !fullWidth && 'max-w-6xl')}>
+      <div className={cn('mx-auto w-full px-4 sm:px-6 h-16 flex items-center justify-between gap-4', !fullWidth && 'max-w-7xl')}>
         <Logo label={logoLabel} href={logoHref} />
         {right && <div className="flex items-center gap-3">{right}</div>}
       </div>
@@ -53,7 +53,7 @@ export function SiteFooter({ showStaffLink = true }: { showStaffLink?: boolean }
   const { t } = useT();
   return (
     <footer className="border-t bg-card">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6 py-6 flex flex-col sm:flex-row justify-between items-center gap-3 text-sm text-muted-foreground">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 py-6 flex flex-col sm:flex-row justify-between items-center gap-3 text-sm text-muted-foreground">
         <p>© {new Date().getFullYear()} Data Vault</p>
         {showStaffLink && (
           <Link href="/admin/login" className="hover:text-primary transition-colors">
