@@ -1,0 +1,13 @@
+# Secrets / local server config — never commit
+.env
+deploy/deploy.env
+*.pem
+
+# Go build artifacts
+/bin/
+*.exe
+*.test
+*.out
+
+# OS/editor cruft
+.DS_Store

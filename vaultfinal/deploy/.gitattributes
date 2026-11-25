@@ -1,0 +1,3 @@
+# Shell scripts must keep Unix line endings, or bash fails with
+# "$'\r': command not found" (on Windows Git Bash and on the server).
+*.sh text eol=lf
